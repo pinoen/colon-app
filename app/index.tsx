@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 const ACCESOS_RAPIDOS = [
   {
@@ -21,48 +21,21 @@ const ACCESOS_RAPIDOS = [
 
 export default function Inicio() {
   return (
-    <View style={styles.contenedor}>
-      <Text style={styles.titulo}>Guía Turística de Colón</Text>
-      <Text style={styles.subtitulo}>Acceso rápido</Text>
+    <View className="flex-1 gap-4 bg-fondo p-6 dark:bg-fondo-oscuro">
+      <Text className="text-3xl font-bold text-texto dark:text-texto-oscuro">
+        Guía Turística de Colón
+      </Text>
+      <Text className="text-base text-texto-secundario dark:text-texto-secundario-oscuro">
+        Acceso rápido
+      </Text>
       {ACCESOS_RAPIDOS.map((acceso) => (
-        <Link key={acceso.ruta} href={acceso.ruta} style={styles.tarjeta}>
-          <Text style={styles.tarjetaTitulo}>{acceso.titulo}</Text>
-          <Text style={styles.tarjetaDescripcion}>{acceso.descripcion}</Text>
+        <Link key={acceso.ruta} href={acceso.ruta} asChild>
+          <Pressable className="rounded-xl bg-primario p-4">
+            <Text className="text-lg font-semibold text-blanco">{acceso.titulo}</Text>
+            <Text className="text-sm text-blanco/90">{acceso.descripcion}</Text>
+          </Pressable>
         </Link>
       ))}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    padding: 24,
-    gap: 16,
-    backgroundColor: '#ffffff',
-  },
-  titulo: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111111',
-  },
-  subtitulo: {
-    fontSize: 16,
-    color: '#555555',
-  },
-  tarjeta: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#f2f4f7',
-    gap: 4,
-  },
-  tarjetaTitulo: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111111',
-  },
-  tarjetaDescripcion: {
-    fontSize: 14,
-    color: '#444444',
-  },
-});
