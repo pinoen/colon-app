@@ -1,7 +1,7 @@
 import { lugaresMock } from '@/mocks/lugares';
 import type { FiltrosLugar } from '@/queries/lugarKeys';
 import type { Result } from '@/tipos/api';
-import type { Lugar } from '@/tipos/lugar';
+import type { IdLugar, Lugar } from '@/tipos/lugar';
 
 const demoraMock = () => new Promise((resolver) => setTimeout(resolver, 250));
 
@@ -18,4 +18,13 @@ export async function listarLugares(
     return lugar.activo && coincideCategoria && coincideBusqueda;
   });
   return { success: true, data: resultados };
+}
+
+export async function obtenerLugar(id: IdLugar): Promise<Result<Lugar>> {
+  await demoraMock();
+  const lugar = lugaresMock.find((candidato) => candidato.id === id);
+  if (lugar === undefined) {
+    return { success: false, error: 'No encontramos ese lugar.' };
+  }
+  return { success: true, data: lugar };
 }
