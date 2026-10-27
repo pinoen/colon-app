@@ -10,7 +10,10 @@ export const lugaresMock: Lugar[] = [
     descripcionCorta: 'Pulmón verde con lago, juegos y cancha de fútbol en pleno centro.',
     descripcion:
       'El Parque Quirós es el parque urbano más importante de Colón. Cuenta con un lago artificial con patos y gansos, amplios senderos para caminar, sector de juegos para chicos y una cancha de fútbol de arena. Es el punto de encuentro preferido de las familias los fines de semana.',
-    coordenadas: { latitud: -32.2277, longitud: -58.0392 },
+    // Nota: la longitud es -58.1392 (no -58.0392). Con el valor anterior el
+    // punto caía ~9 km al este, fuera de la región inicial del mapa y del
+    // centro de Colón.
+    coordenadas: { latitud: -32.2277, longitud: -58.1392 },
     direccion: 'Av. Ejército 1100, Colón',
     imagenes: [
       'https://cdn.ejemplo.com/colon/parque-quiros-1.jpg',
