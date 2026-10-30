@@ -4,6 +4,7 @@ import {
   abrirBaseDatos,
   guardarLugar,
   guardarVisita,
+  obtenerVisita as obtenerVisitaGuardada,
   obtenerVisitas,
 } from '@/servicios/baseDatos';
 import { obtenerUbicacionActual } from '@/servicios/ubicacion';
@@ -221,6 +222,78 @@ export async function listarVisitas(): Promise<Result<Visita[]>> {
     return {
       success: false,
       error: 'No pudimos leer tus visitas guardadas. Intentá de nuevo.',
+    };
+  }
+}
+
+export async function obtenerVisita(
+  id: IdVisita,
+): Promise<Result<Visita | null>> {
+  try {
+    const visita = await obtenerVisitaGuardada(id);
+    return { success: true, data: visita };
+  } catch {
+    return {
+      success: false,
+      error: 'No pudimos leer esta visita. Intentá de nuevo.',
+    };
+  }
+}
+
+export interface CambiosVisita {
+  fotoUri?: string | null;
+  nota?: string | null;
+}
+
+const ERROR_FOTO_INVALIDA =
+  'No pudimos guardar la foto elegida. Probá con otra imagen.';
+
+function esRutaLocal(uri: string): boolean {
+  return uri.startsWith('file://');
+}
+
+/**
+ * Guarda la foto y/o la nota de una visita existente. La foto queda como ruta
+ * local `file://` y la visita se mantiene pendiente de sincronizar.
+ */
+export async function actualizarVisita(
+  id: IdVisita,
+  cambios: CambiosVisita,
+): Promise<Result<Visita>> {
+  if (
+    cambios.fotoUri !== undefined &&
+    cambios.fotoUri !== null &&
+    !esRutaLocal(cambios.fotoUri)
+  ) {
+    return { success: false, error: ERROR_FOTO_INVALIDA };
+  }
+
+  try {
+    const visita = await obtenerVisitaGuardada(id);
+    if (visita === null) {
+      return { success: false, error: 'No encontramos esa visita.' };
+    }
+
+    const actualizada: Visita = {
+      ...visita,
+      fotoUri: cambios.fotoUri !== undefined ? cambios.fotoUri : visita.fotoUri,
+      nota: cambios.nota !== undefined ? cambios.nota : visita.nota,
+      sincronizada: false,
+    };
+
+    const base = await abrirBaseDatos();
+    await base.runAsync(
+      `UPDATE visitas
+       SET fotoUri = ?, nota = ?, sincronizada = 0
+       WHERE id = ?`,
+      [actualizada.fotoUri, actualizada.nota, actualizada.id],
+    );
+
+    return { success: true, data: actualizada };
+  } catch {
+    return {
+      success: false,
+      error: 'No pudimos guardar los cambios de la visita. Intentá de nuevo.',
     };
   }
 }

@@ -1,5 +1,6 @@
 import type { BarcodeScanningResult } from 'expo-camera';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,35 +16,16 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { VisitaCard } from '@/componentes/VisitaCard';
 import { paleta } from '@/constantes/colores';
 import { useLugares } from '@/hooks/useLugares';
 import type { EntradaRegistroVisita } from '@/hooks/useVisitas';
 import { useRegistrarVisita, useVisitas } from '@/hooks/useVisitas';
 import { RADIO_PROXIMIDAD_METROS } from '@/servicios/visitas';
 import type { IdLugar } from '@/tipos/lugar';
-import type { OrigenVisita, Visita } from '@/tipos/visita';
-
-const ETIQUETAS_ORIGEN: Record<OrigenVisita, string> = {
-  qr: 'Código QR',
-  gps: 'Proximidad GPS',
-  manual: 'Carga manual',
-};
-
-function formatearFechaHora(fechaHora: string): string {
-  const fecha = new Date(fechaHora);
-  if (Number.isNaN(fecha.getTime())) {
-    return fechaHora;
-  }
-  return fecha.toLocaleString('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export default function RecorridoScreen() {
+  const router = useRouter();
   const visitasQuery = useVisitas();
   const lugaresQuery = useLugares();
   const registro = useRegistrarVisita();
@@ -73,7 +55,7 @@ export default function RecorridoScreen() {
         escaneandoRef.current = false;
         Alert.alert(
           'Visita registrada',
-          `Guardamos tu visita a ${lugar?.nombre ?? 'este lugar'}. Quedó en el dispositivo y se sincronizará cuando haya conexión.`,
+          `Guardamos tu visita a ${lugar?.nombre ?? 'este lugar'}. Quedó en el dispositivo y se sincronizará cuando haya conexión. Podés agregarle una foto y una nota desde Mis visitas.`,
         );
       },
       onError: (error) => {
@@ -259,12 +241,18 @@ export default function RecorridoScreen() {
             </View>
           ) : (
             visitasQuery.data.map((visita) => (
-              <TarjetaVisita
+              <VisitaCard
                 key={visita.id}
                 visita={visita}
                 nombreLugar={
                   lugaresPorId.get(visita.lugarId)?.nombre ??
                   'Lugar no disponible'
+                }
+                onPress={() =>
+                  router.push({
+                    pathname: '/visitas/[id]',
+                    params: { id: visita.id },
+                  })
                 }
               />
             ))
@@ -495,40 +483,3 @@ function MetodoRegistro({
   );
 }
 
-function TarjetaVisita({
-  visita,
-  nombreLugar,
-}: {
-  visita: Visita;
-  nombreLugar: string;
-}) {
-  return (
-    <View className="gap-2 rounded-2xl bg-superficie p-4 dark:bg-superficie-oscura">
-      <View className="flex-row items-start justify-between gap-3">
-        <Text className="flex-1 text-base font-semibold text-texto dark:text-texto-oscuro">
-          {nombreLugar}
-        </Text>
-        <View className="rounded-full bg-primario/10 px-3 py-1 dark:bg-primario/20">
-          <Text className="text-xs font-semibold text-primario dark:text-primario-claro">
-            {ETIQUETAS_ORIGEN[visita.origen]}
-          </Text>
-        </View>
-      </View>
-      <Text className="text-sm text-texto-secundario dark:text-texto-secundario-oscuro">
-        {formatearFechaHora(visita.fechaHora)}
-      </Text>
-      <View className="flex-row items-center gap-2">
-        <View
-          className={`h-2 w-2 rounded-full ${
-            visita.sincronizada ? 'bg-exito' : 'bg-acento'
-          }`}
-        />
-        <Text className="flex-1 text-xs text-texto-secundario dark:text-texto-secundario-oscuro">
-          {visita.sincronizada
-            ? 'Sincronizada'
-            : 'Guardada en el dispositivo · pendiente de sincronizar'}
-        </Text>
-      </View>
-    </View>
-  );
-}
