@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { paleta } from '@/constantes/colores';
 import { construirCodigoQr } from '@/constantes/qr';
+import { useAuth } from '@/context/AuthContext';
+import { useAlternarFavorito, useFavoritos } from '@/hooks/useFavoritos';
 import { useLugar } from '@/hooks/useLugar';
 import { useRegistrarVisita } from '@/hooks/useVisitas';
 import { categoriaKeys } from '@/queries/categoriaKeys';
@@ -113,6 +115,37 @@ function ContenidoDetalle({
   const abrirEnlace = (enlace: string) =>
     Linking.openURL(enlace).catch(() => undefined);
 
+  const router = useRouter();
+  const { usuario } = useAuth();
+  const favoritosQuery = useFavoritos(usuario);
+  const alternarFavorito = useAlternarFavorito(usuario);
+  const esFavorito =
+    favoritosQuery.data?.some((favorito) => favorito.lugarId === lugar.id) ??
+    false;
+
+  const alternar = () => {
+    if (usuario === null) {
+      Alert.alert(
+        'Favoritos',
+        'Iniciá sesión para guardar este lugar en tus favoritos.',
+        [
+          { text: 'Ahora no', style: 'cancel' },
+          {
+            text: 'Ir a Perfil',
+            onPress: () => router.push('/perfil'),
+          },
+        ],
+      );
+      return;
+    }
+
+    alternarFavorito.mutate(lugar.id, {
+      onError: (error) => {
+        Alert.alert('Favoritos', error.message);
+      },
+    });
+  };
+
   const precio = formatearPrecio(lugar.precioEntrada);
   const horarios = formatearHorarios(lugar.horarios);
   const diaHoy = new Date().getDay();
@@ -159,6 +192,31 @@ function ContenidoDetalle({
           <Badge texto={precio ?? 'Sin datos de entrada'} />
           {lugar.accesible ? <Badge texto="Accesible" /> : null}
         </View>
+        <Pressable
+          onPress={alternar}
+          disabled={alternarFavorito.isPending}
+          accessibilityRole="button"
+          accessibilityLabel={
+            esFavorito
+              ? `Quitar ${lugar.nombre} de favoritos`
+              : `Guardar ${lugar.nombre} en favoritos`
+          }
+          className={`mt-1 rounded-xl px-5 py-3 ${
+            esFavorito ? 'bg-acento' : 'bg-primario'
+          } ${alternarFavorito.isPending ? 'opacity-60' : ''}`}
+        >
+          <Text
+            className={`text-center text-base font-semibold ${
+              esFavorito ? 'text-texto' : 'text-blanco'
+            }`}
+          >
+            {alternarFavorito.isPending
+              ? 'Guardando...'
+              : esFavorito
+                ? '★ Quitar de favoritos'
+                : '☆ Guardar en favoritos'}
+          </Text>
+        </Pressable>
       </View>
 
       {lugar.imagenes.length > 0 ? (
