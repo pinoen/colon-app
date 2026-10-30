@@ -20,13 +20,6 @@ import {
   type MapaOSMRef,
 } from '@/componentes/mapaComun';
 
-/**
- * Mapa OpenStreetMap + Leaflet dentro de un WebView.
- *
- * No requiere API key. Funciona en Expo Go (react-native-webview viene
- * incluido) y en builds nativos. La lógica del mapa vive en `htmlMapa.ts`;
- * este componente sólo monta el WebView y traduce los mensajes.
- */
 export const MapaOSM = forwardRef<MapaOSMRef, MapaOSMProps>(function MapaOSM(
   {
     lugares,
@@ -133,7 +126,6 @@ export const MapaOSM = forwardRef<MapaOSMRef, MapaOSMProps>(function MapaOSM(
         if (!/^https?:/i.test(solicitud.url)) {
           return true;
         }
-        // Los enlaces de atribución de OpenStreetMap se abren fuera del mapa.
         Linking.openURL(solicitud.url).catch(() => undefined);
         return false;
       }}
