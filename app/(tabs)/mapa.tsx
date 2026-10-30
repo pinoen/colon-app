@@ -14,7 +14,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { MapaOSM } from '@/componentes/MapaOSM';
 import type { MapaOSMRef } from '@/componentes/mapaComun';
-import { useTema } from '@/context/TemaContext';
 import { useLugares } from '@/hooks/useLugares';
 import { useUbicacion } from '@/hooks/useUbicacion';
 import { categoriaKeys } from '@/queries/categoriaKeys';
@@ -53,7 +52,6 @@ export default function MapaScreen() {
   const [vista, setVista] = useState<VistaMapa | undefined>(undefined);
   const [heading, setHeading] = useState<number | undefined>(undefined);
   const [errorMapa, setErrorMapa] = useState<string | undefined>(undefined);
-  const { esquema } = useTema();
 
   const {
     data: lugares,
@@ -171,7 +169,7 @@ export default function MapaScreen() {
         lugares={lugares ?? []}
         ubicacion={ubicacion}
         seleccionadoId={seleccionadoId}
-        oscuro={esquema === 'dark'}
+        oscuro={false}
         onSeleccionar={manejarSeleccion}
         onVistaChange={manejarVista}
         onError={manejarErrorMapa}
@@ -206,7 +204,7 @@ export default function MapaScreen() {
       {errorMapa !== undefined ? (
         <View className="absolute left-4 right-20 top-14 rounded-xl bg-superficie px-3 py-2 dark:bg-superficie-oscura">
           <Text className="text-xs text-texto-secundario dark:text-texto-secundario-oscuro">
-            {errorMapa} Los lugares cercanos siguen disponibles.
+            {errorMapa}
           </Text>
         </View>
       ) : null}

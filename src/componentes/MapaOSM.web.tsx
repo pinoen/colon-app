@@ -16,12 +16,6 @@ import {
   type MapaOSMRef,
 } from '@/componentes/mapaComun';
 
-/**
- * Variante web del mapa (react-native-web).
- *
- * `react-native-webview` no soporta web, así que el mismo HTML de Leaflet se
- * monta dentro de un iframe y se comunica con `postMessage`.
- */
 export const MapaOSM = forwardRef<MapaOSMRef, MapaOSMProps>(function MapaOSM(
   {
     lugares,
