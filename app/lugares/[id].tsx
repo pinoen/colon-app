@@ -15,7 +15,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { paleta } from '@/constantes/colores';
+import { construirCodigoQr } from '@/constantes/qr';
 import { useLugar } from '@/hooks/useLugar';
+import { useRegistrarVisita } from '@/hooks/useVisitas';
 import { categoriaKeys } from '@/queries/categoriaKeys';
 import { listarCategorias } from '@/servicios/categorias';
 import type { IdLugar, Lugar } from '@/tipos/lugar';
@@ -114,7 +116,29 @@ function ContenidoDetalle({
   const precio = formatearPrecio(lugar.precioEntrada);
   const horarios = formatearHorarios(lugar.horarios);
   const diaHoy = new Date().getDay();
-  const qrValido = lugar.codigoQr === `COLON:${lugar.id}`;
+  const codigoQr = construirCodigoQr(lugar.id);
+  const qrValido = lugar.codigoQr === codigoQr;
+  const registro = useRegistrarVisita();
+
+  const registrarVisita = () => {
+    if (!qrValido) {
+      return;
+    }
+    registro.mutate(
+      { origen: 'qr', codigoQr },
+      {
+        onSuccess: () => {
+          Alert.alert(
+            'Visita registrada',
+            `Guardamos tu visita a ${lugar.nombre}. Quedó en el dispositivo y se sincronizará cuando haya conexión.`,
+          );
+        },
+        onError: (error) => {
+          Alert.alert('No se pudo registrar la visita', error.message);
+        },
+      },
+    );
+  };
 
   return (
     <ScrollView
@@ -222,16 +246,16 @@ function ContenidoDetalle({
       <Seccion titulo="Registro de visita">
         {qrValido ? (
           <Pressable
-            onPress={() =>
-              Alert.alert(
-                'Registrar visita',
-                'El registro por QR estará disponible en una próxima versión.',
-              )
-            }
-            className="rounded-xl bg-primario px-6 py-3"
+            onPress={registrarVisita}
+            disabled={registro.isPending}
+            accessibilityRole="button"
+            accessibilityLabel={`Registrar visita a ${lugar.nombre}`}
+            className={`rounded-xl bg-primario px-6 py-3 ${
+              registro.isPending ? 'opacity-60' : ''
+            }`}
           >
             <Text className="text-center text-base font-semibold text-blanco">
-              Registrar visita
+              {registro.isPending ? 'Registrando...' : 'Registrar visita'}
             </Text>
           </Pressable>
         ) : (
