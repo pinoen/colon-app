@@ -5,7 +5,7 @@ import type { IdLugar, Lugar } from '@/tipos/lugar';
 import type { IdUsuario } from '@/tipos/usuario';
 import type { IdVisita, Visita } from '@/tipos/visita';
 
-const NOMBRE_BASE_DATOS = 'colon.db';
+export const NOMBRE_BASE_DATOS = 'colon.db';
 
 const ESQUEMA_BASE_DATOS = `
 PRAGMA foreign_keys = ON;
@@ -134,6 +134,16 @@ export async function abrirBaseDatos(): Promise<SQLiteDatabase> {
     baseDatos = base;
   }
   return baseDatos;
+}
+
+/** Cierra la conexión abierta para poder borrar el archivo en una migración. */
+export async function cerrarBaseDatos(): Promise<void> {
+  if (baseDatos === null) {
+    return;
+  }
+  const base = baseDatos;
+  baseDatos = null;
+  await base.closeAsync();
 }
 
 function aFilaLugar(lugar: Lugar): FilaLugar {
