@@ -20,6 +20,7 @@ const CLAVES_KV_A_BORRAR = [
   'colon.preferencias.v1',
   'colon.preferencias.pendientes',
   'colon.favoritos.snapshot',
+  'agenda:eventos-guardados:snapshots:v1',
   'colon.auth.usuario',
   'colon.auth.biometria',
   'agenda:recordatorios:v1',
