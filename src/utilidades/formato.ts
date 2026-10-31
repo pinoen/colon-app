@@ -91,6 +91,33 @@ function dosDigitos(valor: number): string {
   return valor.toString().padStart(2, '0');
 }
 
+/** "312" → "5:12"; "3720" → "1:02:00". */
+export function formatearTiempoAudio(segundos: number): string {
+  if (!Number.isFinite(segundos) || segundos <= 0) {
+    return '0:00';
+  }
+  const total = Math.floor(segundos);
+  const horas = Math.floor(total / 3600);
+  const minutos = Math.floor((total % 3600) / 60);
+  const segundosRestantes = total % 60;
+  if (horas > 0) {
+    return `${horas}:${dosDigitos(minutos)}:${dosDigitos(segundosRestantes)}`;
+  }
+  return `${minutos}:${dosDigitos(segundosRestantes)}`;
+}
+
+/** Tiempo restante de una audioguía con signo: "-4:48". */
+export function formatearTiempoRestanteAudio(
+  duracionSegundos: number,
+  posicionSegundos: number,
+): string {
+  const restante = Math.max(
+    0,
+    Math.floor(duracionSegundos) - Math.floor(posicionSegundos),
+  );
+  return `-${formatearTiempoAudio(restante)}`;
+}
+
 /** "2026-11-06T10:00:00-03:00" → "Viernes 6 de noviembre de 2026". */
 export function formatearFechaDia(fechaIso: string): string {
   const partes = parsearPartesFechaIso(fechaIso);

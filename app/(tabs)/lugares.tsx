@@ -88,18 +88,16 @@ export default function LugaresScreen() {
           <View className="flex-row gap-2 pr-4">
             <Pressable
               onPress={() => router.setParams({ categoria: undefined })}
-              className={`rounded-full px-4 py-2 ${
-                categoria === undefined
+              className={`rounded-full px-4 py-2 ${categoria === undefined
                   ? 'bg-primario'
                   : 'bg-superficie dark:bg-superficie-oscura'
-              }`}
+                }`}
             >
               <Text
-                className={`text-sm font-medium ${
-                  categoria === undefined
+                className={`text-sm font-medium ${categoria === undefined
                     ? 'text-blanco'
                     : 'text-texto dark:text-texto-oscuro'
-                }`}
+                  }`}
               >
                 Todas
               </Text>
@@ -112,18 +110,16 @@ export default function LugaresScreen() {
                     categoria: c.id === categoria ? undefined : c.id,
                   })
                 }
-                className={`rounded-full px-4 py-2 ${
-                  categoria === c.id
+                className={`rounded-full px-4 py-2 ${categoria === c.id
                     ? 'bg-primario'
                     : 'bg-superficie dark:bg-superficie-oscura'
-                }`}
+                  }`}
               >
                 <Text
-                  className={`text-sm font-medium ${
-                    categoria === c.id
+                  className={`text-sm font-medium ${categoria === c.id
                       ? 'text-blanco'
                       : 'text-texto dark:text-texto-oscuro'
-                  }`}
+                    }`}
                 >
                   {c.nombre}
                 </Text>
