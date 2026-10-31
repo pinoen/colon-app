@@ -62,7 +62,7 @@ function mensajeBloqueo(evento: Evento): string {
     return 'Este evento fue cancelado: no admite recordatorios.';
   }
   if (evento.estado === 'suspendido') {
-    return 'Este evento está suspendido: no admite recordatorios.';
+    return 'Este evento está suspendido y ya no está vigente para guardarlo.';
   }
   if (evento.estado === 'finalizado') {
     return 'Este evento ya finalizó.';
@@ -99,6 +99,26 @@ export default function AgendaScreen() {
   const guardar = (evento: Evento) => {
     guardarEvento.mutate(evento, {
       onSuccess: (recordatorio) => {
+        if (evento.estado === 'suspendido') {
+          Alert.alert(
+            'Evento guardado',
+            recordatorio.sincronizada
+              ? 'El evento quedó en tus eventos guardados. No se programa recordatorio mientras esté suspendido.'
+              : recordatorio.usuarioId === null
+                ? 'El evento quedó guardado en este dispositivo, sin recordatorio.'
+                : 'El evento quedó guardado en este dispositivo y se sincronizará cuando haya conexión.',
+          );
+          return;
+        }
+        if (!recordatorio.sincronizada) {
+          Alert.alert(
+            'Evento guardado',
+            recordatorio.usuarioId === null
+              ? 'El evento y el recordatorio quedaron guardados en este dispositivo.'
+              : 'El evento y el recordatorio quedaron guardados en este dispositivo y se sincronizarán cuando haya conexión.',
+          );
+          return;
+        }
         if (recordatorio.notificacionId === null) {
           Alert.alert(
             'Evento guardado',
@@ -121,8 +141,8 @@ export default function AgendaScreen() {
     quitarRecordatorio.mutate(evento.id, {
       onSuccess: () => {
         Alert.alert(
-          'Recordatorio eliminado',
-          `Ya no vas a recibir un aviso para "${evento.titulo}".`,
+          'Evento quitado',
+          `Quitamos "${evento.titulo}" de tus eventos guardados y cancelamos el recordatorio local.`,
         );
       },
       onError: (error) => {
@@ -239,7 +259,12 @@ function TarjetaEvento({
   onQuitar: () => void;
 }) {
   const estilo = ESTILOS_ESTADO[evento.estado];
-  const bloqueado = evento.estado !== 'programado' || fechaYaPaso(evento.inicio);
+  const fechaPasada = fechaYaPaso(evento.inicio);
+  const bloqueado =
+    evento.estado === 'cancelado' ||
+    evento.estado === 'finalizado' ||
+    fechaPasada;
+  const admiteAviso = evento.estado === 'programado' && !fechaPasada;
   const ubicacion =
     evento.direccionLibre ??
     nombreLugar ??
@@ -290,7 +315,11 @@ function TarjetaEvento({
         {tieneRecordatorio ? (
           <View className="gap-2 rounded-xl bg-primario/10 p-3 dark:bg-primario/20">
             <Text className="text-sm font-semibold text-primario dark:text-primario-claro">
-              Recordatorio agendado
+              {recordatorio?.sincronizada === true
+                ? 'Evento guardado · recordatorio agendado'
+                : recordatorio?.usuarioId === null
+                  ? 'Guardado en este dispositivo · recordatorio agendado'
+                  : 'Pendiente de sincronizar · recordatorio agendado'}
             </Text>
             <Text className="text-xs text-texto-secundario dark:text-texto-secundario-oscuro">
               Te avisaremos antes del inicio del evento.
@@ -299,27 +328,32 @@ function TarjetaEvento({
               onPress={onQuitar}
               disabled={quitando}
               accessibilityRole="button"
-              accessibilityLabel={`Quitar el recordatorio de ${evento.titulo}`}
+              accessibilityLabel={`Quitar ${evento.titulo} de eventos guardados`}
               accessibilityState={{ disabled: quitando }}
               className={`items-center rounded-xl border border-peligro px-4 py-2 dark:border-[#FF8A80] ${
                 quitando ? 'opacity-60' : ''
               }`}
             >
               <Text className="text-sm font-semibold text-peligro dark:text-[#FF8A80]">
-                {quitando ? 'Quitando...' : 'Quitar recordatorio'}
+                {quitando ? 'Quitando...' : 'Quitar de guardados'}
               </Text>
             </Pressable>
           </View>
         ) : recordatorio !== undefined ? (
           <View className="gap-2 rounded-xl bg-acento/15 p-3">
             <Text className="text-sm font-semibold text-[#7A4F00] dark:text-acento">
-              Evento guardado sin recordatorio
+              {recordatorio.sincronizada
+                ? 'Evento guardado sin recordatorio'
+                : recordatorio.usuarioId === null
+                  ? 'Guardado solo en este dispositivo'
+                  : 'Guardado en el dispositivo · pendiente de sincronizar'}
             </Text>
             <Text className="text-xs text-texto-secundario dark:text-texto-secundario-oscuro">
-              Revisá los permisos de notificaciones del dispositivo para
-              recibir el aviso.
+              {evento.estado === 'suspendido'
+                ? 'No se programa un recordatorio mientras el evento esté suspendido.'
+                : 'Revisá los permisos de notificaciones del dispositivo para recibir el aviso.'}
             </Text>
-            {bloqueado ? null : (
+            {admiteAviso ? (
               <Pressable
                 onPress={onGuardar}
                 disabled={guardando}
@@ -334,7 +368,18 @@ function TarjetaEvento({
                   {guardando ? 'Guardando...' : 'Reintentar recordatorio'}
                 </Text>
               </Pressable>
-            )}
+            ) : null}
+            <Pressable
+              onPress={onQuitar}
+              disabled={quitando}
+              accessibilityRole="button"
+              accessibilityLabel={`Quitar ${evento.titulo} de eventos guardados`}
+              className={`items-center rounded-xl border border-peligro px-4 py-2 dark:border-[#FF8A80] ${quitando ? 'opacity-60' : ''}`}
+            >
+              <Text className="text-sm font-semibold text-peligro dark:text-[#FF8A80]">
+                {quitando ? 'Quitando...' : 'Quitar de guardados'}
+              </Text>
+            </Pressable>
           </View>
         ) : bloqueado ? (
           <Text className="text-sm text-texto-secundario dark:text-texto-secundario-oscuro">
@@ -345,14 +390,22 @@ function TarjetaEvento({
             onPress={onGuardar}
             disabled={guardando}
             accessibilityRole="button"
-            accessibilityLabel={`Guardar evento ${evento.titulo} con recordatorio`}
+            accessibilityLabel={
+              evento.estado === 'programado'
+                ? `Guardar evento ${evento.titulo} y recordatorio`
+                : `Guardar evento ${evento.titulo}`
+            }
             accessibilityState={{ disabled: guardando }}
             className={`items-center rounded-xl bg-primario px-4 py-3 ${
               guardando ? 'opacity-60' : ''
             }`}
           >
             <Text className="text-base font-semibold text-blanco">
-              {guardando ? 'Guardando...' : 'Guardar evento'}
+              {guardando
+                ? 'Guardando...'
+                : evento.estado === 'programado'
+                  ? 'Guardar evento y recordatorio'
+                  : 'Guardar evento'}
             </Text>
           </Pressable>
         )}
