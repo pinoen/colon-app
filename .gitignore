@@ -36,6 +36,7 @@ yarn-error.*
 !.env.example
 
 # project documentation (internal, not for the repo)
+opencode.json
 /.opencode
 /constitution.md
 /plan.md
