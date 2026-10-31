@@ -417,7 +417,7 @@ function FormularioSesion({
           {modoRegistro ? 'Crear cuenta' : 'Iniciar sesión'}
         </Text>
         <Text className="text-sm text-texto-secundario dark:text-texto-secundario-oscuro">
-          Tu cuenta guarda favoritos y preferencias en este dispositivo.
+          Ingresá para sincronizar tu perfil y tus preferencias.
         </Text>
       </View>
 
@@ -443,7 +443,7 @@ function FormularioSesion({
       <CampoTexto
         etiqueta="Contraseña"
         valor={contrasena}
-        placeholder="Mínimo 6 caracteres"
+        placeholder={modoRegistro ? 'Mínimo 8 caracteres' : 'Tu contraseña'}
         secureTextEntry
         autoCapitalize="none"
         onChangeText={onCambiarContrasena}
