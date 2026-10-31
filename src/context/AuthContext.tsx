@@ -11,19 +11,28 @@ import {
 import { useTema } from '@/context/TemaContext';
 import {
   PREFERENCIAS_POR_DEFECTO,
+  actualizarMiUsuario,
   autenticarConBiometria,
+  borrarPreferenciasPendientes,
   borrarSesionGuardada,
   consultarBiometria,
   establecerBiometria,
   guardarPreferencias,
+  guardarPreferenciasPendientes,
   guardarSesion,
   iniciarSesion as iniciarSesionServicio,
+  leerPreferenciasPendientes,
   leerPreferencias,
   leerSesionGuardada,
+  obtenerMiUsuario,
   registrarCuenta as registrarCuentaServicio,
   type Sesion,
 } from '@/servicios/autenticacion';
-import { fijarTokenAcceso } from '@/servicios/clienteApi';
+import {
+  fijarTokenAcceso,
+  puedeUsarCache,
+  registrarManejadorNoAutorizado,
+} from '@/servicios/clienteApi';
 import type { Result } from '@/tipos/api';
 import type { Preferencias, Usuario } from '@/tipos/usuario';
 
@@ -44,12 +53,44 @@ interface ContextoAuth {
   cerrarSesion: () => Promise<Result<null>>;
   desbloquearConBiometria: () => Promise<Result<null>>;
   activarBiometria: (habilitada: boolean) => Promise<Result<boolean>>;
+  actualizarPerfil: (
+    cambios: Partial<Pick<Usuario, 'nombre' | 'avatarUrl'>>,
+  ) => Promise<Result<Usuario>>;
   actualizarPreferencias: (
     cambios: Partial<Preferencias>,
   ) => Promise<Result<Preferencias>>;
 }
 
 const AuthContexto = createContext<ContextoAuth | null>(null);
+
+function esNoAutenticado(resultado: Result<unknown>): boolean {
+  return (
+    !resultado.success &&
+    (resultado.codigo === 'NO_AUTENTICADO' || resultado.estado === 401)
+  );
+}
+
+async function sincronizarPreferenciasPendientes(
+  usuario: Usuario,
+): Promise<Result<Usuario>> {
+  const pendientes = await leerPreferenciasPendientes(usuario.id);
+  if (pendientes === null) {
+    return { success: true, data: usuario };
+  }
+
+  const resultado = await actualizarMiUsuario({ preferencias: pendientes });
+  if (resultado.success) {
+    await borrarPreferenciasPendientes(usuario.id);
+  }
+  return resultado;
+}
+
+async function guardarUsuarioEnSesion(usuario: Usuario): Promise<void> {
+  const sesion = await leerSesionGuardada();
+  if (sesion.success && sesion.data !== null) {
+    await guardarSesion({ token: sesion.data.token, usuario });
+  }
+}
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { cambiarTema } = useTema();
@@ -64,10 +105,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [biometriaHabilitada, setBiometriaHabilitada] = useState(false);
 
   useEffect(() => {
+    registrarManejadorNoAutorizado(() => {
+      fijarTokenAcceso(null);
+      setUsuario(null);
+      setRequiereDesbloqueo(false);
+      void borrarSesionGuardada();
+    });
+    return () => registrarManejadorNoAutorizado(null);
+  }, []);
+
+  useEffect(() => {
     let activo = true;
 
     const cargar = async () => {
-      const [preferenciasGuardadas, sesion, biometria] = await Promise.all([
+      const [preferenciasLocales, sesion, biometria] = await Promise.all([
         leerPreferencias(),
         leerSesionGuardada(),
         consultarBiometria(),
@@ -77,20 +128,75 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      setPreferencias(preferenciasGuardadas);
-      cambiarTema(preferenciasGuardadas.tema);
+      setPreferencias(preferenciasLocales);
+      cambiarTema(preferenciasLocales.tema);
       setBiometriaDisponible(biometria.disponible);
       setBiometriaHabilitada(biometria.habilitada);
 
       if (sesion.success && sesion.data !== null) {
-        fijarTokenAcceso(sesion.data.token);
+        const sesionLocal = sesion.data;
+        fijarTokenAcceso(sesionLocal.token);
         setUsuario({
-          ...sesion.data.usuario,
-          preferencias: preferenciasGuardadas,
+          ...sesionLocal.usuario,
+          preferencias: preferenciasLocales,
         });
         setRequiereDesbloqueo(biometria.habilitada);
+        setCargando(false);
+
+        // No consultamos el perfil remoto hasta desbloquear una sesión biométrica.
+        if (!biometria.habilitada) {
+          const remoto = await obtenerMiUsuario();
+          if (!activo) {
+            return;
+          }
+
+          if (remoto.success) {
+            let usuarioActual = remoto.data;
+            const preferenciasPendientes = await leerPreferenciasPendientes(
+              usuarioActual.id,
+            );
+            const sincronizadas = await sincronizarPreferenciasPendientes(
+              usuarioActual,
+            );
+
+            if (sincronizadas.success) {
+              usuarioActual = sincronizadas.data;
+            } else if (puedeUsarCache(sincronizadas)) {
+              usuarioActual = {
+                ...usuarioActual,
+                preferencias:
+                  preferenciasPendientes ?? usuarioActual.preferencias,
+              };
+            } else if (esNoAutenticado(sincronizadas)) {
+              return;
+            }
+
+            await guardarPreferencias(usuarioActual.preferencias);
+            await guardarSesion({
+              token: sesionLocal.token,
+              usuario: usuarioActual,
+            });
+            if (!activo) {
+              return;
+            }
+            setPreferencias(usuarioActual.preferencias);
+            cambiarTema(usuarioActual.preferencias.tema);
+            setUsuario(usuarioActual);
+          } else if (esNoAutenticado(remoto)) {
+            fijarTokenAcceso(null);
+            await borrarSesionGuardada();
+            if (activo) {
+              setUsuario(null);
+              setRequiereDesbloqueo(false);
+            }
+          }
+        }
+        return;
       }
 
+      fijarTokenAcceso(null);
+      setUsuario(null);
+      setRequiereDesbloqueo(false);
       setCargando(false);
     };
 
@@ -109,12 +215,42 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       fijarTokenAcceso(sesion.token);
-      setUsuario(sesion.usuario);
-      setPreferencias(sesion.usuario.preferencias);
+      let usuarioActual = sesion.usuario;
+      const preferenciasPendientes = await leerPreferenciasPendientes(
+        usuarioActual.id,
+      );
+      const sincronizadas = await sincronizarPreferenciasPendientes(
+        usuarioActual,
+      );
+      if (sincronizadas.success) {
+        usuarioActual = sincronizadas.data;
+      } else if (puedeUsarCache(sincronizadas) && preferenciasPendientes !== null) {
+        usuarioActual = {
+          ...usuarioActual,
+          preferencias: preferenciasPendientes,
+        };
+      } else if (esNoAutenticado(sincronizadas)) {
+        fijarTokenAcceso(null);
+        await borrarSesionGuardada();
+        return sincronizadas;
+      }
+
+      await guardarPreferencias(usuarioActual.preferencias);
+      const sesionActualizada = await guardarSesion({
+        token: sesion.token,
+        usuario: usuarioActual,
+      });
+      if (!sesionActualizada.success) {
+        return sesionActualizada;
+      }
+
+      setUsuario(usuarioActual);
+      setPreferencias(usuarioActual.preferencias);
+      cambiarTema(usuarioActual.preferencias.tema);
       setRequiereDesbloqueo(false);
-      return { success: true, data: sesion.usuario };
+      return { success: true, data: usuarioActual };
     },
-    [],
+    [cambiarTema],
   );
 
   const iniciarSesion = useCallback(
@@ -124,12 +260,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return resultado;
       }
 
-      return aplicarSesion({
-        ...resultado.data,
-        usuario: { ...resultado.data.usuario, preferencias },
-      });
+      return aplicarSesion(resultado.data);
     },
-    [aplicarSesion, preferencias],
+    [aplicarSesion],
   );
 
   const registrarse = useCallback(
@@ -147,12 +280,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return resultado;
       }
 
-      return aplicarSesion({
-        ...resultado.data,
-        usuario: { ...resultado.data.usuario, preferencias },
-      });
+      return aplicarSesion(resultado.data);
     },
-    [aplicarSesion, preferencias],
+    [aplicarSesion],
   );
 
   const cerrarSesion = useCallback(async (): Promise<Result<null>> => {
@@ -184,10 +314,60 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     fijarTokenAcceso(sesion.data.token);
-    setUsuario({ ...sesion.data.usuario, preferencias });
+    let usuarioActual: Usuario = {
+      ...sesion.data.usuario,
+      preferencias,
+    };
+    const remoto = await obtenerMiUsuario();
+    if (remoto.success) {
+      usuarioActual = remoto.data;
+      const preferenciasPendientes = await leerPreferenciasPendientes(
+        usuarioActual.id,
+      );
+      const sincronizadas = await sincronizarPreferenciasPendientes(
+        usuarioActual,
+      );
+      if (sincronizadas.success) {
+        usuarioActual = sincronizadas.data;
+      } else if (puedeUsarCache(sincronizadas)) {
+        usuarioActual = {
+          ...usuarioActual,
+          preferencias:
+            preferenciasPendientes ?? usuarioActual.preferencias,
+        };
+      } else if (esNoAutenticado(sincronizadas)) {
+        fijarTokenAcceso(null);
+        await borrarSesionGuardada();
+        setUsuario(null);
+        setRequiereDesbloqueo(false);
+        return {
+          success: false,
+          error: sincronizadas.error,
+          codigo: sincronizadas.codigo,
+          estado: sincronizadas.estado,
+        };
+      }
+    } else if (esNoAutenticado(remoto)) {
+      fijarTokenAcceso(null);
+      await borrarSesionGuardada();
+      setUsuario(null);
+      setRequiereDesbloqueo(false);
+      return {
+        success: false,
+        error: remoto.error,
+        codigo: remoto.codigo,
+        estado: remoto.estado,
+      };
+    }
+
+    await guardarPreferencias(usuarioActual.preferencias);
+    await guardarSesion({ token: sesion.data.token, usuario: usuarioActual });
+    setUsuario(usuarioActual);
+    setPreferencias(usuarioActual.preferencias);
+    cambiarTema(usuarioActual.preferencias.tema);
     setRequiereDesbloqueo(false);
     return { success: true, data: null };
-  }, [preferencias]);
+  }, [cambiarTema, preferencias]);
 
   const activarBiometria = useCallback(
     async (habilitada: boolean): Promise<Result<boolean>> => {
@@ -203,6 +383,29 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return resultado;
     },
     [],
+  );
+
+  const actualizarPerfil = useCallback(
+    async (
+      cambios: Partial<Pick<Usuario, 'nombre' | 'avatarUrl'>>,
+    ): Promise<Result<Usuario>> => {
+      if (usuario === null) {
+        return {
+          success: false,
+          error: 'Iniciá sesión para actualizar tu perfil.',
+        };
+      }
+
+      const resultado = await actualizarMiUsuario(cambios);
+      if (!resultado.success) {
+        return resultado;
+      }
+
+      setUsuario(resultado.data);
+      await guardarUsuarioEnSesion(resultado.data);
+      return resultado;
+    },
+    [usuario],
   );
 
   const actualizarPreferencias = useCallback(
@@ -228,16 +431,51 @@ export function AuthProvider({ children }: PropsWithChildren) {
       cambiarTema(guardado.data.tema);
 
       if (usuario !== null) {
-        const actualizado: Usuario = {
-          ...usuario,
-          preferencias: guardado.data,
-        };
-        setUsuario(actualizado);
-
-        const sesion = await leerSesionGuardada();
-        if (sesion.success && sesion.data !== null) {
-          await guardarSesion({ ...sesion.data, usuario: actualizado });
+        const pendientes = await leerPreferenciasPendientes(usuario.id);
+        const cambiosRemotos =
+          pendientes === null ? cambios : { ...pendientes, ...cambios };
+        const remoto = await actualizarMiUsuario({
+          preferencias: cambiosRemotos,
+        });
+        if (remoto.success) {
+          const preferenciasRemotas = remoto.data.preferencias;
+          await guardarPreferencias(preferenciasRemotas);
+          await borrarPreferenciasPendientes(usuario.id);
+          setUsuario(remoto.data);
+          setPreferencias(preferenciasRemotas);
+          cambiarTema(preferenciasRemotas.tema);
+          await guardarUsuarioEnSesion(remoto.data);
+          return { success: true, data: preferenciasRemotas };
         }
+
+        if (puedeUsarCache(remoto)) {
+          await guardarPreferenciasPendientes(usuario.id, guardado.data);
+          const actualizado: Usuario = {
+            ...usuario,
+            preferencias: guardado.data,
+          };
+          setUsuario(actualizado);
+          await guardarUsuarioEnSesion(actualizado);
+          return guardado;
+        }
+
+        if (esNoAutenticado(remoto)) {
+          const preferenciasRestauradas = await guardarPreferencias(
+            preferencias,
+          );
+          setPreferencias(preferencias);
+          cambiarTema(preferencias.tema);
+          return preferenciasRestauradas.success ? remoto : preferenciasRestauradas;
+        }
+
+        const preferenciasRestauradas = await guardarPreferencias(preferencias);
+        setPreferencias(preferencias);
+        cambiarTema(preferencias.tema);
+        if (preferenciasRestauradas.success) {
+          setUsuario(usuario);
+          await guardarUsuarioEnSesion(usuario);
+        }
+        return remoto;
       }
 
       return guardado;
@@ -259,6 +497,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       desbloquearConBiometria,
       activarBiometria,
       actualizarPreferencias,
+      actualizarPerfil,
     }),
     [
       usuario,
@@ -272,6 +511,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       cerrarSesion,
       desbloquearConBiometria,
       activarBiometria,
+      actualizarPerfil,
       actualizarPreferencias,
     ],
   );
