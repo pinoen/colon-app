@@ -2,7 +2,8 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import Storage from 'expo-sqlite/kv-store';
 
-import type { Result } from '@/tipos/api';
+import { peticion } from '@/servicios/clienteApi';
+import type { Result, Sesion as SesionApi } from '@/tipos/api';
 import type { IdUsuario, Preferencias, Usuario } from '@/tipos/usuario';
 
 /**
@@ -15,8 +16,7 @@ const CLAVE_USUARIO = 'colon.auth.usuario';
 /** Bandera no sensible que habilita el reingreso biométrico local. */
 const CLAVE_BIOMETRIA = 'colon.auth.biometria';
 const CLAVE_PREFERENCIAS = 'colon.preferencias.v1';
-
-const DEMORA_MOCK_MS = 300;
+const CLAVE_PREFERENCIAS_PENDIENTES = 'colon.preferencias.pendientes';
 
 export const PREFERENCIAS_POR_DEFECTO: Preferencias = {
   categoriasFavoritas: [],
@@ -25,10 +25,7 @@ export const PREFERENCIAS_POR_DEFECTO: Preferencias = {
   tema: 'sistema',
 };
 
-export interface Sesion {
-  token: string;
-  usuario: Usuario;
-}
+export type Sesion = SesionApi;
 
 const ERROR_SESION =
   'No pudimos guardar tu sesión en este dispositivo. Intentá de nuevo.';
@@ -41,43 +38,12 @@ const ERROR_BIOMETRIA_DESHABILITADA =
 const ERROR_VERIFICACION =
   'No pudimos verificar tu identidad. Ingresá con tu email y contraseña.';
 
-const demoraMock = () =>
-  new Promise((resolver) => setTimeout(resolver, DEMORA_MOCK_MS));
-
 function normalizarEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
 function esEmailValido(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-/**
- * Genera un id estable a partir del email para que el mismo usuario conserve
- * sus favoritos entre ingresos. Nunca se hacen operaciones matemáticas con el id.
- */
-function generarIdUsuario(email: string): IdUsuario {
-  let hash = 2166136261;
-  for (let indice = 0; indice < email.length; indice += 1) {
-    hash ^= email.charCodeAt(indice);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `usr-${(hash >>> 0).toString(36)}`;
-}
-
-function generarToken(): string {
-  const marca = Date.now().toString(36);
-  const azar = Math.random().toString(36).slice(2, 12);
-  return `tok-${marca}${azar}`;
-}
-
-function nombreDesdeEmail(email: string): string {
-  const base = email.split('@')[0] ?? 'Visitante';
-  const partes = base
-    .split(/[._-]+/)
-    .filter((parte) => parte.length > 0)
-    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1));
-  return partes.length > 0 ? partes.join(' ') : 'Visitante';
 }
 
 function normalizarPreferencias(valor: unknown): Preferencias {
@@ -139,6 +105,127 @@ function normalizarUsuario(valor: unknown): Usuario | null {
   };
 }
 
+function normalizarSesion(valor: unknown): Sesion | null {
+  if (typeof valor !== 'object' || valor === null) {
+    return null;
+  }
+  const candidato = valor as Record<string, unknown>;
+  const usuario = normalizarUsuario(candidato.usuario);
+  if (
+    typeof candidato.token !== 'string' ||
+    candidato.token.length === 0 ||
+    usuario === null
+  ) {
+    return null;
+  }
+  return { token: candidato.token, usuario };
+}
+
+export interface CambiosUsuarioApi {
+  nombre?: string;
+  avatarUrl?: string | null;
+  preferencias?: Partial<Preferencias>;
+}
+
+export async function obtenerMiUsuario(): Promise<Result<Usuario>> {
+  const respuesta = await peticion<unknown>({ method: 'GET', url: '/yo' });
+  if (!respuesta.success) {
+    return respuesta;
+  }
+  const usuario = normalizarUsuario(respuesta.data);
+  return usuario === null
+    ? {
+        success: false,
+        error: 'La API devolvió un perfil con formato inválido.',
+        codigo: 'RESPUESTA_INVALIDA',
+      }
+    : { success: true, data: usuario };
+}
+
+export async function actualizarMiUsuario(
+  cambios: CambiosUsuarioApi,
+): Promise<Result<Usuario>> {
+  const respuesta = await peticion<unknown>({
+    method: 'PATCH',
+    url: '/yo',
+    data: cambios,
+  });
+  if (!respuesta.success) {
+    return respuesta;
+  }
+  const usuario = normalizarUsuario(respuesta.data);
+  return usuario === null
+    ? {
+        success: false,
+        error: 'La API devolvió un perfil con formato inválido.',
+        codigo: 'RESPUESTA_INVALIDA',
+      }
+    : { success: true, data: usuario };
+}
+
+export async function guardarPreferenciasPendientes(
+  usuarioId: IdUsuario,
+  preferencias: Preferencias,
+): Promise<boolean> {
+  try {
+    await Storage.setItemAsync(
+      CLAVE_PREFERENCIAS_PENDIENTES,
+      JSON.stringify({ usuarioId, preferencias }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function leerPreferenciasPendientes(
+  usuarioId: IdUsuario,
+): Promise<Preferencias | null> {
+  try {
+    const crudo = await Storage.getItemAsync(CLAVE_PREFERENCIAS_PENDIENTES);
+    if (crudo === null) {
+      return null;
+    }
+    const pendiente: unknown = JSON.parse(crudo);
+    if (
+      typeof pendiente !== 'object' ||
+      pendiente === null ||
+      (pendiente as Record<string, unknown>).usuarioId !== usuarioId
+    ) {
+      return null;
+    }
+    return normalizarPreferencias(
+      (pendiente as Record<string, unknown>).preferencias,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function borrarPreferenciasPendientes(
+  usuarioId?: IdUsuario,
+): Promise<void> {
+  try {
+    if (usuarioId !== undefined) {
+      const crudo = await Storage.getItemAsync(CLAVE_PREFERENCIAS_PENDIENTES);
+      if (crudo === null) {
+        return;
+      }
+      const pendiente: unknown = JSON.parse(crudo);
+      if (
+        typeof pendiente !== 'object' ||
+        pendiente === null ||
+        (pendiente as Record<string, unknown>).usuarioId !== usuarioId
+      ) {
+        return;
+      }
+    }
+    await Storage.removeItemAsync(CLAVE_PREFERENCIAS_PENDIENTES);
+  } catch {
+    // Una clave ausente o un almacenamiento no disponible no bloquea el flujo.
+  }
+}
+
 async function leerUsuarioGuardado(): Promise<Usuario | null> {
   try {
     const crudo = await Storage.getItemAsync(CLAVE_USUARIO);
@@ -181,44 +268,34 @@ export async function guardarPreferencias(
   }
 }
 
-/**
- * Login simulado mientras la API del tercero no está disponible (A2/A3).
- * Valida las entradas y devuelve un token + perfil tipado; nunca persiste la
- * contraseña.
- */
 export async function iniciarSesion(
   email: string,
   contrasena: string,
 ): Promise<Result<Sesion>> {
-  await demoraMock();
-
   const correo = normalizarEmail(email);
   if (!esEmailValido(correo)) {
     return { success: false, error: 'Ingresá un email válido.' };
   }
-  if (contrasena.length < 6) {
-    return {
-      success: false,
-      error: 'La contraseña debe tener al menos 6 caracteres.',
-    };
+  if (contrasena.length === 0) {
+    return { success: false, error: 'Ingresá tu contraseña.' };
   }
 
-  const preferencias = await leerPreferencias();
-  const existente = await leerUsuarioGuardado();
-
-  const usuario: Usuario =
-    existente !== null && existente.email === correo
-      ? { ...existente, preferencias }
-      : {
-          id: generarIdUsuario(correo),
-          nombre: nombreDesdeEmail(correo),
-          email: correo,
-          avatarUrl: null,
-          creadoEn: new Date().toISOString(),
-          preferencias,
-        };
-
-  return { success: true, data: { token: generarToken(), usuario } };
+  const respuesta = await peticion<unknown>({
+    method: 'POST',
+    url: '/auth/ingreso',
+    data: { email: correo, contrasena },
+  });
+  if (!respuesta.success) {
+    return respuesta;
+  }
+  const sesion = normalizarSesion(respuesta.data);
+  return sesion === null
+    ? {
+        success: false,
+        error: 'La API devolvió una sesión con formato inválido.',
+        codigo: 'RESPUESTA_INVALIDA',
+      }
+    : { success: true, data: sesion };
 }
 
 export async function registrarCuenta(
@@ -226,34 +303,44 @@ export async function registrarCuenta(
   email: string,
   contrasena: string,
 ): Promise<Result<Sesion>> {
-  await demoraMock();
-
   const correo = normalizarEmail(email);
   const nombreLimpio = nombre.trim();
 
   if (nombreLimpio.length < 2) {
     return { success: false, error: 'Ingresá tu nombre.' };
   }
+  if (nombreLimpio.length > 100) {
+    return { success: false, error: 'El nombre puede tener hasta 100 letras.' };
+  }
   if (!esEmailValido(correo)) {
     return { success: false, error: 'Ingresá un email válido.' };
   }
-  if (contrasena.length < 6) {
+  if (contrasena.length < 8) {
     return {
       success: false,
-      error: 'La contraseña debe tener al menos 6 caracteres.',
+      error: 'La contraseña debe tener al menos 8 caracteres.',
     };
   }
+  if (contrasena.length > 200) {
+    return { success: false, error: 'La contraseña es demasiado larga.' };
+  }
 
-  const usuario: Usuario = {
-    id: generarIdUsuario(correo),
-    nombre: nombreLimpio,
-    email: correo,
-    avatarUrl: null,
-    creadoEn: new Date().toISOString(),
-    preferencias: await leerPreferencias(),
-  };
-
-  return { success: true, data: { token: generarToken(), usuario } };
+  const respuesta = await peticion<unknown>({
+    method: 'POST',
+    url: '/auth/registro',
+    data: { nombre: nombreLimpio, email: correo, contrasena },
+  });
+  if (!respuesta.success) {
+    return respuesta;
+  }
+  const sesion = normalizarSesion(respuesta.data);
+  return sesion === null
+    ? {
+        success: false,
+        error: 'La API devolvió una sesión con formato inválido.',
+        codigo: 'RESPUESTA_INVALIDA',
+      }
+    : { success: true, data: sesion };
 }
 
 /** Guarda el token en SecureStore y el perfil no sensible en kv-store. */
