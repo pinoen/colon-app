@@ -1,6 +1,12 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 
-import type { EnvelopeApi, ErrorEnvelope, Meta, Result } from '@/tipos/api';
+import type {
+  ArchivoSubido,
+  EnvelopeApi,
+  ErrorEnvelope,
+  Meta,
+  Result,
+} from '@/tipos/api';
 
 const URL_BASE_CONFIGURADA = process.env.EXPO_PUBLIC_API_URL?.trim();
 const URL_BASE = (
@@ -48,6 +54,33 @@ export async function peticion<T>(
   } catch (error) {
     return resultadoDeError(error);
   }
+}
+
+export interface ArchivoLocalApi {
+  uri: string;
+  nombre: string;
+  mimeType: string;
+}
+
+/** Sube un archivo desde una URI local como multipart con el campo `archivo`. */
+export function subirArchivo(
+  archivo: ArchivoLocalApi,
+): Promise<Result<ArchivoSubido>> {
+  const formulario = new FormData();
+  formulario.append(
+    'archivo',
+    {
+      uri: archivo.uri,
+      name: archivo.nombre,
+      type: archivo.mimeType,
+    } as unknown as Blob,
+  );
+  return peticion<ArchivoSubido>({
+    method: 'POST',
+    url: '/archivos',
+    data: formulario,
+    timeout: 60_000,
+  });
 }
 
 /**

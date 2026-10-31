@@ -346,8 +346,8 @@ function ContenidoVisita({
             </View>
           ) : (
             <Text className="text-xs text-texto-secundario dark:text-texto-secundario-oscuro">
-              La foto se guarda como archivo local y se subirá cuando la visita
-              se sincronice.
+              La foto queda guardada en este dispositivo; si la visita está
+              pendiente, se subirá al sincronizarla.
             </Text>
           )}
         </Seccion>
