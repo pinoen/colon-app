@@ -3,13 +3,17 @@ import { SchedulableTriggerInputTypes } from 'expo-notifications/build/Notificat
 import Storage from 'expo-sqlite/kv-store';
 import { Platform } from 'react-native';
 
-import { eventosMock } from '@/mocks/eventos';
 import type { FiltrosEvento } from '@/queries/eventoKeys';
+import {
+  obtenerEventos,
+  obtenerLugares,
+  reemplazarEventos,
+} from '@/servicios/baseDatos';
+import { peticionLista, puedeUsarCache } from '@/servicios/clienteApi';
+import { listarLugares } from '@/servicios/lugares';
 import type { Result } from '@/tipos/api';
 import type { Evento, IdEvento } from '@/tipos/evento';
 import { formatearFechaDia, formatearHora } from '@/utilidades/formato';
-
-const demoraMock = () => new Promise((resolver) => setTimeout(resolver, 250));
 
 const CLAVE_RECORDATORIOS = 'agenda:recordatorios:v1';
 const CANAL_RECORDATORIOS = 'recordatorios-agenda';
@@ -192,17 +196,105 @@ function calcularAviso(inicioMs: number): number {
   return objetivo > Date.now() ? objetivo : Date.now() + 60 * 1000;
 }
 
-export async function listarEventos(
-  filtros: FiltrosEvento = {},
-): Promise<Result<Evento[]>> {
-  await demoraMock();
-  const resultados = eventosMock
+function filtrarEventos(eventos: Evento[], filtros: FiltrosEvento): Evento[] {
+  return eventos
     .filter(
       (evento) =>
         filtros.estado === undefined || evento.estado === filtros.estado,
     )
     .sort((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio));
-  return { success: true, data: resultados };
+}
+
+async function cachearEventos(eventos: Evento[]): Promise<void> {
+  try {
+    if (eventos.length === 0) {
+      await reemplazarEventos([]);
+      return;
+    }
+
+    let lugaresExistentes = new Set(
+      (await obtenerLugares()).map((lugar) => lugar.id),
+    );
+    const faltaAlgunLugar = eventos.some(
+      (evento) =>
+        evento.lugarId !== null && !lugaresExistentes.has(evento.lugarId),
+    );
+    if (faltaAlgunLugar) {
+      await listarLugares({});
+      lugaresExistentes = new Set(
+        (await obtenerLugares()).map((lugar) => lugar.id),
+      );
+    }
+
+    const eventosParaCache = eventos.map((evento) =>
+      evento.lugarId !== null && !lugaresExistentes.has(evento.lugarId)
+        ? { ...evento, lugarId: null }
+        : evento,
+    );
+    await reemplazarEventos(eventosParaCache);
+  } catch {
+    // La respuesta sigue siendo válida aunque no se pueda cachear.
+  }
+}
+
+let eventosEnVuelo: Promise<Result<Evento[]>> | null = null;
+
+async function cargarEventos(): Promise<Result<Evento[]>> {
+  const respuesta = await peticionLista<Evento>({
+    method: 'GET',
+    url: '/eventos',
+    params: { porPagina: 100 },
+  });
+
+  if (respuesta.success) {
+    await cachearEventos(respuesta.data.datos);
+    return { success: true, data: respuesta.data.datos };
+  }
+
+  if (puedeUsarCache(respuesta)) {
+    try {
+      const cacheados = await obtenerEventos();
+      if (cacheados.length > 0) {
+        return { success: true, data: cacheados };
+      }
+    } catch {
+      // Si tampoco hay caché legible, se conserva el error original.
+    }
+  }
+
+  return respuesta;
+}
+
+function obtenerEventosBase(): Promise<Result<Evento[]>> {
+  if (eventosEnVuelo !== null) {
+    return eventosEnVuelo;
+  }
+
+  const promesa = cargarEventos();
+  eventosEnVuelo = promesa;
+  void promesa.then(
+    () => {
+      if (eventosEnVuelo === promesa) {
+        eventosEnVuelo = null;
+      }
+    },
+    () => {
+      if (eventosEnVuelo === promesa) {
+        eventosEnVuelo = null;
+      }
+    },
+  );
+  return promesa;
+}
+
+export async function listarEventos(
+  filtros: FiltrosEvento = {},
+): Promise<Result<Evento[]>> {
+  const resultado = await obtenerEventosBase();
+  if (!resultado.success) {
+    return resultado;
+  }
+  return { success: true, data: filtrarEventos(resultado.data, filtros) };
 }
 
 export async function listarRecordatoriosEventos(): Promise<
@@ -220,8 +312,6 @@ export async function listarRecordatoriosEventos(): Promise<
 export async function guardarEventoConRecordatorio(
   evento: Evento,
 ): Promise<Result<RecordatorioEvento>> {
-  await demoraMock();
-
   if (evento.estado !== 'programado') {
     return { success: false, error: ERROR_ESTADO };
   }
