@@ -1,9 +1,9 @@
-import { categoriasMock } from '@/mocks/categorias';
-import { lugaresMock } from '@/mocks/lugares';
 import {
   abrirBaseDatos,
   guardarLugar,
   guardarVisita,
+  obtenerLugar as obtenerLugarCache,
+  obtenerLugares,
   obtenerVisita as obtenerVisitaGuardada,
   obtenerVisitas,
 } from '@/servicios/baseDatos';
@@ -49,42 +49,21 @@ function generarIdVisita(): IdVisita {
   return `vis-${marca}${azar}`;
 }
 
-function buscarLugarActivo(id: IdLugar): Lugar | null {
-  const lugar = lugaresMock.find((candidato) => candidato.id === id);
-  return lugar !== undefined && lugar.activo ? lugar : null;
+async function buscarLugarActivo(id: IdLugar): Promise<Lugar | null> {
+  try {
+    const lugar = await obtenerLugarCache(id);
+    return lugar !== null && lugar.activo ? lugar : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Las visitas referencian lugares y usuarios por FK en SQLite. Antes de
- * insertar la visita se cachean las filas mínimas necesarias para que el
- * registro funcione aunque el catálogo todavía no esté precargado (T14).
+ * Las visitas referencian lugares y usuarios por FK en SQLite. El lugar ya
+ * viene del catálogo cacheado, así que sólo se asegura el usuario local.
  */
 async function asegurarReferencias(lugar: Lugar): Promise<void> {
   const base = await abrirBaseDatos();
-  const categoria = categoriasMock.find(
-    (candidata) => candidata.id === lugar.categoriaId,
-  );
-
-  if (categoria !== undefined) {
-    await base.runAsync(
-      `INSERT INTO categorias (id, nombre, icono, color, orden, actualizadoEn)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         nombre = excluded.nombre,
-         icono = excluded.icono,
-         color = excluded.color,
-         orden = excluded.orden,
-         actualizadoEn = excluded.actualizadoEn`,
-      [
-        categoria.id,
-        categoria.nombre,
-        categoria.icono,
-        categoria.color,
-        categoria.orden,
-        lugar.actualizadoEn,
-      ],
-    );
-  }
 
   await guardarLugar(lugar);
 
@@ -140,7 +119,7 @@ export async function registrarVisitaPorQr(
     return { success: false, error: ERROR_QR_INVALIDO };
   }
 
-  const lugar = buscarLugarActivo(lugarId);
+  const lugar = await buscarLugarActivo(lugarId);
   if (lugar === null) {
     return { success: false, error: ERROR_QR_NO_DISPONIBLE };
   }
@@ -151,7 +130,7 @@ export async function registrarVisitaPorQr(
 export async function registrarVisitaManual(
   lugarId: IdLugar,
 ): Promise<Result<Visita>> {
-  const lugar = buscarLugarActivo(lugarId);
+  const lugar = await buscarLugarActivo(lugarId);
   if (lugar === null) {
     return { success: false, error: 'No encontramos ese lugar.' };
   }
@@ -196,7 +175,18 @@ export async function registrarVisitaPorProximidad(
     return { success: false, error: ERROR_SIN_UBICACION };
   }
 
-  const [candidato] = lugaresMock
+  let lugares: Lugar[];
+  try {
+    lugares = await obtenerLugares();
+  } catch {
+    return {
+      success: false,
+      error:
+        'No pudimos leer los lugares guardados. Probá de nuevo o registrá la visita de forma manual.',
+    };
+  }
+
+  const [candidato] = lugares
     .filter((lugar) => lugar.activo)
     .map((lugar) => ({
       lugar,

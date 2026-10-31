@@ -1,6 +1,8 @@
-import { categoriasMock } from '@/mocks/categorias';
-import { lugaresMock } from '@/mocks/lugares';
-import { abrirBaseDatos, guardarLugar } from '@/servicios/baseDatos';
+import {
+  abrirBaseDatos,
+  guardarLugar,
+  obtenerLugar as obtenerLugarCache,
+} from '@/servicios/baseDatos';
 import type { Result } from '@/tipos/api';
 import type { Favorito, IdFavorito } from '@/tipos/favorito';
 import type { IdLugar, Lugar } from '@/tipos/lugar';
@@ -41,45 +43,24 @@ function aFavorito(fila: FilaFavorito): Favorito {
   };
 }
 
-function buscarLugarActivo(id: IdLugar): Lugar | null {
-  const lugar = lugaresMock.find((candidato) => candidato.id === id);
-  return lugar !== undefined && lugar.activo ? lugar : null;
+async function buscarLugarActivo(id: IdLugar): Promise<Lugar | null> {
+  try {
+    const lugar = await obtenerLugarCache(id);
+    return lugar !== null && lugar.activo ? lugar : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Los favoritos referencian usuarios y lugares por FK en SQLite. Se cachean
- * las filas mínimas para que el guardado funcione aunque el catálogo todavía
- * no esté precargado (T14).
+ * Los favoritos referencian usuarios y lugares por FK en SQLite. El lugar ya
+ * viene del catálogo cacheado, así que sólo se asegura el usuario.
  */
 async function asegurarReferencias(
   usuario: Usuario,
   lugar: Lugar,
 ): Promise<void> {
   const base = await abrirBaseDatos();
-  const categoria = categoriasMock.find(
-    (candidata) => candidata.id === lugar.categoriaId,
-  );
-
-  if (categoria !== undefined) {
-    await base.runAsync(
-      `INSERT INTO categorias (id, nombre, icono, color, orden, actualizadoEn)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         nombre = excluded.nombre,
-         icono = excluded.icono,
-         color = excluded.color,
-         orden = excluded.orden,
-         actualizadoEn = excluded.actualizadoEn`,
-      [
-        categoria.id,
-        categoria.nombre,
-        categoria.icono,
-        categoria.color,
-        categoria.orden,
-        lugar.actualizadoEn,
-      ],
-    );
-  }
 
   await guardarLugar(lugar);
 
@@ -137,7 +118,7 @@ export async function agregarFavorito(
   usuario: Usuario,
   lugarId: IdLugar,
 ): Promise<Result<Favorito>> {
-  const lugar = buscarLugarActivo(lugarId);
+  const lugar = await buscarLugarActivo(lugarId);
   if (lugar === null) {
     return { success: false, error: ERROR_LUGAR };
   }

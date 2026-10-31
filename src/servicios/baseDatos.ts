@@ -1,6 +1,7 @@
 import { openDatabaseAsync, SQLiteDatabase } from 'expo-sqlite';
 
-import type { IdCategoria } from '@/tipos/categoria';
+import type { Categoria, IdCategoria } from '@/tipos/categoria';
+import type { Evento } from '@/tipos/evento';
 import type { IdLugar, Lugar } from '@/tipos/lugar';
 import type { IdUsuario } from '@/tipos/usuario';
 import type { IdVisita, Visita } from '@/tipos/visita';
@@ -114,6 +115,21 @@ interface FilaLugar {
   actualizadoEn: string;
 }
 
+interface FilaEvento {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  lugarId: string | null;
+  direccionLibre: string | null;
+  latitud: number | null;
+  longitud: number | null;
+  inicio: string;
+  fin: string | null;
+  imagenUrl: string | null;
+  precio: number | null;
+  estado: string;
+}
+
 interface FilaVisita {
   id: IdVisita;
   usuarioId: IdUsuario;
@@ -189,6 +205,83 @@ function aLugar(fila: FilaLugar): Lugar {
     activo: fila.activo === 1,
     actualizadoEn: fila.actualizadoEn,
   };
+}
+
+function aFilaEvento(evento: Evento): FilaEvento {
+  return {
+    id: evento.id,
+    titulo: evento.titulo,
+    descripcion: evento.descripcion,
+    lugarId: evento.lugarId,
+    direccionLibre: evento.direccionLibre,
+    latitud: evento.coordenadas?.latitud ?? null,
+    longitud: evento.coordenadas?.longitud ?? null,
+    inicio: evento.inicio,
+    fin: evento.fin,
+    imagenUrl: evento.imagenUrl,
+    precio: evento.precio,
+    estado: evento.estado,
+  };
+}
+
+function aEvento(fila: FilaEvento): Evento {
+  return {
+    id: fila.id as Evento['id'],
+    titulo: fila.titulo,
+    descripcion: fila.descripcion,
+    lugarId: fila.lugarId as Evento['lugarId'],
+    direccionLibre: fila.direccionLibre,
+    coordenadas:
+      fila.latitud === null || fila.longitud === null
+        ? null
+        : { latitud: fila.latitud, longitud: fila.longitud },
+    inicio: fila.inicio,
+    fin: fila.fin,
+    imagenUrl: fila.imagenUrl,
+    precio: fila.precio,
+    estado: fila.estado as Evento['estado'],
+  };
+}
+
+export async function guardarCategorias(
+  categorias: Categoria[],
+): Promise<void> {
+  if (categorias.length === 0) {
+    return;
+  }
+
+  const base = await abrirBaseDatos();
+  const actualizadoEn = new Date().toISOString();
+
+  await base.withTransactionAsync(async () => {
+    for (const categoria of categorias) {
+      await base.runAsync(
+        `INSERT INTO categorias (id, nombre, icono, color, orden, actualizadoEn)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           nombre = excluded.nombre,
+           icono = excluded.icono,
+           color = excluded.color,
+           orden = excluded.orden,
+           actualizadoEn = excluded.actualizadoEn`,
+        [
+          categoria.id,
+          categoria.nombre,
+          categoria.icono,
+          categoria.color,
+          categoria.orden,
+          actualizadoEn,
+        ],
+      );
+    }
+  });
+}
+
+export async function obtenerCategorias(): Promise<Categoria[]> {
+  const base = await abrirBaseDatos();
+  return base.getAllAsync<Categoria>(
+    'SELECT id, nombre, icono, color, orden FROM categorias ORDER BY orden, nombre',
+  );
 }
 
 function aFilaVisita(visita: Visita): FilaVisita {
@@ -267,6 +360,12 @@ export async function guardarLugar(lugar: Lugar): Promise<void> {
   );
 }
 
+export async function guardarLugares(lugares: Lugar[]): Promise<void> {
+  for (const lugar of lugares) {
+    await guardarLugar(lugar);
+  }
+}
+
 export async function obtenerLugar(id: string): Promise<Lugar | null> {
   const base = await abrirBaseDatos();
   const fila = await base.getFirstAsync<FilaLugar>(
@@ -282,6 +381,46 @@ export async function obtenerLugares(): Promise<Lugar[]> {
     'SELECT * FROM lugares WHERE activo = 1 ORDER BY nombre',
   );
   return filas.map(aLugar);
+}
+
+export async function reemplazarEventos(eventos: Evento[]): Promise<void> {
+  const base = await abrirBaseDatos();
+
+  await base.withTransactionAsync(async () => {
+    await base.runAsync('DELETE FROM eventos');
+
+    for (const evento of eventos) {
+      const fila = aFilaEvento(evento);
+      await base.runAsync(
+        `INSERT INTO eventos (
+          id, titulo, descripcion, lugarId, direccionLibre, latitud, longitud,
+          inicio, fin, imagenUrl, precio, estado
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          fila.id,
+          fila.titulo,
+          fila.descripcion,
+          fila.lugarId,
+          fila.direccionLibre,
+          fila.latitud,
+          fila.longitud,
+          fila.inicio,
+          fila.fin,
+          fila.imagenUrl,
+          fila.precio,
+          fila.estado,
+        ],
+      );
+    }
+  });
+}
+
+export async function obtenerEventos(): Promise<Evento[]> {
+  const base = await abrirBaseDatos();
+  const filas = await base.getAllAsync<FilaEvento>(
+    'SELECT * FROM eventos ORDER BY inicio',
+  );
+  return filas.map(aEvento);
 }
 
 export async function guardarVisita(visita: Visita): Promise<void> {

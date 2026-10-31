@@ -50,6 +50,17 @@ export async function peticion<T>(
   }
 }
 
+/**
+ * Indica si un fallo permite recurrir a la copia local: sin red, timeout o
+ * servidor caído. Los 4xx (validación, permisos, 404) se devuelven tal cual.
+ */
+export function puedeUsarCache(resultado: Result<unknown>): boolean {
+  return (
+    !resultado.success &&
+    (resultado.estado === undefined || resultado.estado >= 500)
+  );
+}
+
 export async function peticionLista<T>(
   config: AxiosRequestConfig,
 ): Promise<Result<{ datos: T[]; meta: Meta }>> {
