@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { paleta } from '@/constantes/colores';
 import { construirCodigoQr } from '@/constantes/qr';
+import { ReproductorAudio } from '@/componentes/ReproductorAudio';
 import { useAuth } from '@/context/AuthContext';
 import { useAlternarFavorito, useFavoritos } from '@/hooks/useFavoritos';
 import { useLugar } from '@/hooks/useLugar';
@@ -287,17 +288,11 @@ function ContenidoDetalle({
             Sin audioguía disponible.
           </Text>
         ) : (
-          <View className="rounded-xl bg-primario/10 p-4 dark:bg-primario/20">
-            <Text className="text-base text-texto dark:text-texto-oscuro">
-              Audioguía disponible en{' '}
-              {lugar.audioguia.idioma === 'es'
-                ? 'español'
-                : lugar.audioguia.idioma === 'en'
-                  ? 'inglés'
-                  : 'portugués'}{' '}
-              ({Math.round(lugar.audioguia.duracionSegundos / 60)} min).
-            </Text>
-          </View>
+          <ReproductorAudio
+            lugarId={lugar.id}
+            audioguia={lugar.audioguia}
+            nombreLugar={lugar.nombre}
+          />
         )}
       </Seccion>
 

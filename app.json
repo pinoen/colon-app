@@ -42,7 +42,8 @@
         {
           "faceIDPermission": "Permitir que Guía Turística de Colón use Face ID para el reingreso seguro."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
