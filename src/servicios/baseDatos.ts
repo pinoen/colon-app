@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS visitas (
   fechaHora   TEXT NOT NULL,
   origen      TEXT NOT NULL CHECK (origen IN ('qr','gps','manual')),
   fotoUri     TEXT,
+  fotoUrlSubida TEXT,
   nota        TEXT,
   sincronizada INTEGER NOT NULL DEFAULT 0
 );
@@ -147,6 +148,11 @@ export async function abrirBaseDatos(): Promise<SQLiteDatabase> {
   if (baseDatos === null) {
     const base = await openDatabaseAsync(NOMBRE_BASE_DATOS);
     await base.execAsync(ESQUEMA_BASE_DATOS);
+    try {
+      await base.execAsync('ALTER TABLE visitas ADD COLUMN fotoUrlSubida TEXT');
+    } catch {
+      // La columna ya existe en bases nuevas o fue agregada en un arranque previo.
+    }
     baseDatos = base;
   }
   return baseDatos;
@@ -428,7 +434,15 @@ export async function guardarVisita(visita: Visita): Promise<void> {
   const fila = aFilaVisita(visita);
   await base.runAsync(
     `INSERT INTO visitas (id, usuarioId, lugarId, fechaHora, origen, fotoUri, nota, sincronizada)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       usuarioId = excluded.usuarioId,
+       lugarId = excluded.lugarId,
+       fechaHora = excluded.fechaHora,
+       origen = excluded.origen,
+       fotoUri = excluded.fotoUri,
+       nota = excluded.nota,
+       sincronizada = excluded.sincronizada`,
     [fila.id, fila.usuarioId, fila.lugarId, fila.fechaHora, fila.origen, fila.fotoUri, fila.nota, fila.sincronizada],
   );
 }
@@ -442,10 +456,38 @@ export async function obtenerVisita(id: string): Promise<Visita | null> {
   return fila === null ? null : aVisita(fila);
 }
 
-export async function obtenerVisitas(): Promise<Visita[]> {
+export async function obtenerVisitas(usuarioId?: IdUsuario): Promise<Visita[]> {
   const base = await abrirBaseDatos();
-  const filas = await base.getAllAsync<FilaVisita>(
-    'SELECT * FROM visitas ORDER BY fechaHora DESC',
-  );
+  const filas =
+    usuarioId === undefined
+      ? await base.getAllAsync<FilaVisita>(
+          'SELECT * FROM visitas ORDER BY fechaHora DESC',
+        )
+      : await base.getAllAsync<FilaVisita>(
+          'SELECT * FROM visitas WHERE usuarioId = ? ORDER BY fechaHora DESC',
+          [usuarioId],
+        );
   return filas.map(aVisita);
+}
+
+export async function obtenerUrlFotoSubidaVisita(
+  id: string,
+): Promise<string | null> {
+  const base = await abrirBaseDatos();
+  const fila = await base.getFirstAsync<{ fotoUrlSubida: string | null }>(
+    'SELECT fotoUrlSubida FROM visitas WHERE id = ?',
+    [id],
+  );
+  return fila?.fotoUrlSubida ?? null;
+}
+
+export async function guardarUrlFotoSubidaVisita(
+  id: string,
+  url: string | null,
+): Promise<void> {
+  const base = await abrirBaseDatos();
+  await base.runAsync('UPDATE visitas SET fotoUrlSubida = ? WHERE id = ?', [
+    url,
+    id,
+  ]);
 }

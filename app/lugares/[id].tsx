@@ -161,10 +161,14 @@ function ContenidoDetalle({
     registro.mutate(
       { origen: 'qr', codigoQr },
       {
-        onSuccess: () => {
+        onSuccess: (visita) => {
           Alert.alert(
             'Visita registrada',
-            `Guardamos tu visita a ${lugar.nombre}. Quedó en el dispositivo y se sincronizará cuando haya conexión.`,
+            `Guardamos tu visita a ${lugar.nombre}${
+              visita.sincronizada
+                ? ' en tu cuenta.'
+                : ' en el dispositivo; se sincronizará cuando haya conexión.'
+            }`,
           );
         },
         onError: (error) => {

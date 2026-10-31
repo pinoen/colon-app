@@ -55,7 +55,11 @@ export default function RecorridoScreen() {
         escaneandoRef.current = false;
         Alert.alert(
           'Visita registrada',
-          `Guardamos tu visita a ${lugar?.nombre ?? 'este lugar'}. Quedó en el dispositivo y se sincronizará cuando haya conexión. Podés agregarle una foto y una nota desde Mis visitas.`,
+          `Guardamos tu visita a ${lugar?.nombre ?? 'este lugar'}${
+            visita.sincronizada
+              ? ' en tu cuenta.'
+              : ' en el dispositivo; se sincronizará cuando haya conexión.'
+          } Podés agregarle una foto y una nota desde Mis visitas.`,
         );
       },
       onError: (error) => {
@@ -482,4 +486,3 @@ function MetodoRegistro({
     </Pressable>
   );
 }
-
