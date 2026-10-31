@@ -21,7 +21,7 @@ export interface ProgresoDescargaAudioguia {
 }
 
 function esUrlValida(url: string): boolean {
-  return url.startsWith('https://');
+  return /^https?:\/\/[^/\s?#]+(?:\/|$)/i.test(url);
 }
 
 function extensionDesdeUrl(url: string): string {
@@ -38,8 +38,20 @@ function obtenerDirectorio(): Directory {
   return directorio;
 }
 
+function hashUrl(url: string): string {
+  let hash = 2166136261;
+  for (let indice = 0; indice < url.length; indice += 1) {
+    hash ^= url.charCodeAt(indice);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function obtenerArchivo(lugarId: IdLugar, url: string): File {
-  return new File(obtenerDirectorio(), `${lugarId}${extensionDesdeUrl(url)}`);
+  return new File(
+    obtenerDirectorio(),
+    `${lugarId}-${hashUrl(url)}${extensionDesdeUrl(url)}`,
+  );
 }
 
 function errorDescarga(): string {
