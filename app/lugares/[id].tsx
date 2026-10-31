@@ -195,7 +195,10 @@ function ContenidoDetalle({
         </View>
         <Pressable
           onPress={alternar}
-          disabled={alternarFavorito.isPending}
+          disabled={
+            alternarFavorito.isPending ||
+            (usuario !== null && favoritosQuery.isPending)
+          }
           accessibilityRole="button"
           accessibilityLabel={
             esFavorito
@@ -204,14 +207,15 @@ function ContenidoDetalle({
           }
           className={`mt-1 rounded-xl px-5 py-3 ${
             esFavorito ? 'bg-acento' : 'bg-primario'
-          } ${alternarFavorito.isPending ? 'opacity-60' : ''}`}
+          } ${alternarFavorito.isPending || (usuario !== null && favoritosQuery.isPending) ? 'opacity-60' : ''}`}
         >
           <Text
             className={`text-center text-base font-semibold ${
               esFavorito ? 'text-texto' : 'text-blanco'
             }`}
           >
-            {alternarFavorito.isPending
+            {alternarFavorito.isPending ||
+            (usuario !== null && favoritosQuery.isPending)
               ? 'Guardando...'
               : esFavorito
                 ? '★ Quitar de favoritos'

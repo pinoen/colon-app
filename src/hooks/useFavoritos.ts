@@ -20,7 +20,7 @@ export function useFavoritos(usuario: Usuario | null) {
     queryKey: favoritoKeys.porUsuario(usuario?.id ?? 'usr-anonimo'),
     enabled: usuario !== null,
     queryFn: async (): Promise<Favorito[]> => {
-      const resultado = await listarFavoritos((usuario as Usuario).id);
+      const resultado = await listarFavoritos(usuario as Usuario);
       if (resultado.success) {
         return resultado.data;
       }

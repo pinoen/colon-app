@@ -19,6 +19,7 @@ const VERSION_DATOS_ACTUAL = 1;
 const CLAVES_KV_A_BORRAR = [
   'colon.preferencias.v1',
   'colon.preferencias.pendientes',
+  'colon.favoritos.snapshot',
   'colon.auth.usuario',
   'colon.auth.biometria',
   'agenda:recordatorios:v1',
