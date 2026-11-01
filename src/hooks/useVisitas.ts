@@ -10,6 +10,7 @@ import {
   registrarVisitaPorQr,
   type CambiosVisita,
 } from '@/servicios/visitas';
+import { sincronizarPendientes } from '@/servicios/sincronizacion';
 import type { IdLugar } from '@/tipos/lugar';
 import type { IdVisita, Visita } from '@/tipos/visita';
 
@@ -80,7 +81,13 @@ export function useRegistrarVisita() {
       return resultado.data;
     },
     onSettled: () => {
-      void cliente.invalidateQueries({ queryKey: visitaKeys.all });
+      const invalidar = () => {
+        void cliente.invalidateQueries({ queryKey: visitaKeys.all });
+      };
+      invalidar();
+      if (usuario !== null) {
+        void sincronizarPendientes(usuario, true).then(invalidar, invalidar);
+      }
     },
   });
 }
@@ -103,7 +110,13 @@ export function useActualizarVisita(id: IdVisita | undefined) {
       return resultado.data;
     },
     onSettled: () => {
-      void cliente.invalidateQueries({ queryKey: visitaKeys.all });
+      const invalidar = () => {
+        void cliente.invalidateQueries({ queryKey: visitaKeys.all });
+      };
+      invalidar();
+      if (usuario !== null) {
+        void sincronizarPendientes(usuario, true).then(invalidar, invalidar);
+      }
     },
   });
 }

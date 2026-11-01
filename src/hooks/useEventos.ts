@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import type { FiltrosEvento } from '@/queries/eventoKeys';
 import { eventoKeys } from '@/queries/eventoKeys';
+import { sincronizarPendientes } from '@/servicios/sincronizacion';
 import {
   guardarEventoConRecordatorio,
   listarEventos,
@@ -56,10 +57,16 @@ export function useGuardarEvento() {
       }
       return resultado.data;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: recordatorioEventoKeys.all,
-      });
+    onSuccess: () => {
+      const invalidar = () => {
+        void queryClient.invalidateQueries({
+          queryKey: recordatorioEventoKeys.all,
+        });
+      };
+      invalidar();
+      if (usuario !== null) {
+        void sincronizarPendientes(usuario, true).then(invalidar, invalidar);
+      }
     },
   });
 }
@@ -76,10 +83,16 @@ export function useQuitarRecordatorioEvento() {
       }
       return resultado.data;
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: recordatorioEventoKeys.all,
-      });
+    onSuccess: () => {
+      const invalidar = () => {
+        void queryClient.invalidateQueries({
+          queryKey: recordatorioEventoKeys.all,
+        });
+      };
+      invalidar();
+      if (usuario !== null) {
+        void sincronizarPendientes(usuario, true).then(invalidar, invalidar);
+      }
     },
   });
 }
