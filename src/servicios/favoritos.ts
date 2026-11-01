@@ -207,28 +207,41 @@ async function quitarPendiente(id: string): Promise<void> {
   await base.runAsync('DELETE FROM cola_sincronizacion WHERE id = ?', [id]);
 }
 
-async function sincronizarPendientes(
-  usuario: Usuario,
+export async function sincronizarFavoritoPendientePorId(
+  id: string,
 ): Promise<Result<null>> {
-  const pendientes = await leerPendientes(usuario.id);
-  for (const pendiente of pendientes) {
-    const { lugarId } = pendiente.payload;
-    const resultado =
-      pendiente.accion === 'marcar'
-        ? await peticion<Favorito>({
-            method: 'PUT',
-            url: `/yo/favoritos/${encodeURIComponent(lugarId)}`,
-          })
-        : await peticion<null>({
-            method: 'DELETE',
-            url: `/yo/favoritos/${encodeURIComponent(lugarId)}`,
-          });
-
-    if (!resultado.success) {
-      return resultado;
-    }
-    await quitarPendiente(pendiente.id);
+  const base = await abrirBaseDatos();
+  const fila = await base.getFirstAsync<FilaCola>(
+    `SELECT id, entidad, accion, payload FROM cola_sincronizacion
+     WHERE id = ? AND entidad = 'favorito'`,
+    [id],
+  );
+  if (
+    fila === null ||
+    (fila.accion !== 'marcar' && fila.accion !== 'desmarcar')
+  ) {
+    return { success: true, data: null };
   }
+  let payload: OperacionFavorito;
+  try {
+    payload = JSON.parse(fila.payload) as OperacionFavorito;
+  } catch {
+    return { success: false, error: 'La operación de favorito guardada no es válida.' };
+  }
+  const resultado =
+    fila.accion === 'marcar'
+      ? await peticion<Favorito>({
+          method: 'PUT',
+          url: `/yo/favoritos/${encodeURIComponent(payload.lugarId)}`,
+        })
+      : await peticion<null>({
+          method: 'DELETE',
+          url: `/yo/favoritos/${encodeURIComponent(payload.lugarId)}`,
+        });
+  if (!resultado.success) {
+    return resultado;
+  }
+  await quitarPendiente(fila.id);
   return { success: true, data: null };
 }
 
@@ -349,18 +362,6 @@ export async function listarFavoritos(
 ): Promise<Result<Favorito[]>> {
   try {
     await asegurarUsuario(usuario);
-    const sincronizacion = await sincronizarPendientes(usuario);
-    if (!sincronizacion.success) {
-      const errorSincronizacion: Result<Favorito[]> = {
-        success: false,
-        error: sincronizacion.error,
-        codigo: sincronizacion.codigo,
-        estado: sincronizacion.estado,
-      };
-      return puedeUsarCache(sincronizacion)
-        ? obtenerCacheLocal(usuario.id, errorSincronizacion)
-        : errorSincronizacion;
-    }
 
     const remotos = await obtenerFavoritosRemotos();
     if (!remotos.success) {

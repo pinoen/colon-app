@@ -7,8 +7,12 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import * as Network from 'expo-network';
+import { AppState } from 'react-native';
 
 import { useTema } from '@/context/TemaContext';
+import { sincronizarPendientes as sincronizarCola } from '@/servicios/sincronizacion';
 import {
   PREFERENCIAS_POR_DEFECTO,
   actualizarMiUsuario,
@@ -94,6 +98,7 @@ async function guardarUsuarioEnSesion(usuario: Usuario): Promise<void> {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { cambiarTema } = useTema();
+  const queryClient = useQueryClient();
 
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [preferencias, setPreferencias] = useState<Preferencias>(
@@ -113,6 +118,86 @@ export function AuthProvider({ children }: PropsWithChildren) {
     });
     return () => registrarManejadorNoAutorizado(null);
   }, []);
+
+  useEffect(() => {
+    if (usuario === null) {
+      return;
+    }
+
+    let activo = true;
+    let sincronizando = false;
+    let conectadoAnterior: boolean | null = null;
+
+    const procesarEstadoRed = async (
+      conectado: boolean,
+      forzar = false,
+    ) => {
+      if (!activo) {
+        return;
+      }
+      if (!conectado) {
+        conectadoAnterior = false;
+        return;
+      }
+
+      const reconexion = forzar || conectadoAnterior === false;
+      conectadoAnterior = true;
+      if (sincronizando) {
+        return;
+      }
+
+      sincronizando = true;
+      try {
+        const resultado = await sincronizarCola(usuario, reconexion);
+        if (!activo || !resultado.success || resultado.data.procesadas === 0) {
+          return;
+        }
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['favoritos'] }),
+          queryClient.invalidateQueries({ queryKey: ['visitas'] }),
+          queryClient.invalidateQueries({
+            queryKey: ['eventos', 'recordatorios'],
+          }),
+        ]);
+      } catch {
+        // La cola se conserva en SQLite para el próximo ciclo de conexión.
+      } finally {
+        sincronizando = false;
+      }
+    };
+
+    const subscription = Network.addNetworkStateListener((estado) => {
+      void procesarEstadoRed(
+        estado.isConnected === true && estado.isInternetReachable !== false,
+      );
+    });
+    void Network.getNetworkStateAsync()
+      .then((estado) =>
+        procesarEstadoRed(
+          estado.isConnected === true && estado.isInternetReachable !== false,
+        ),
+      )
+      .catch(() => undefined);
+    const subscriptionAppState = AppState.addEventListener(
+      'change',
+      (estado) => {
+        if (estado === 'active') {
+          void Network.getNetworkStateAsync().then((red) =>
+            procesarEstadoRed(
+              red.isConnected === true && red.isInternetReachable !== false,
+              true,
+            ),
+          );
+        }
+      },
+    );
+
+    return () => {
+      activo = false;
+      subscription.remove();
+      subscriptionAppState.remove();
+    };
+  }, [queryClient, usuario]);
 
   useEffect(() => {
     let activo = true;
@@ -456,6 +541,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           };
           setUsuario(actualizado);
           await guardarUsuarioEnSesion(actualizado);
+          void sincronizarCola(actualizado, true).catch(() => undefined);
           return guardado;
         }
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { sincronizarPendientes } from '@/servicios/sincronizacion';
 import {
   alternarFavorito,
   listarFavoritos,
@@ -47,7 +48,13 @@ export function useAlternarFavorito(usuario: Usuario | null) {
       return resultado.data;
     },
     onSuccess: () => {
-      void cliente.invalidateQueries({ queryKey: favoritoKeys.all });
+      const invalidar = () => {
+        void cliente.invalidateQueries({ queryKey: favoritoKeys.all });
+      };
+      invalidar();
+      if (usuario !== null) {
+        void sincronizarPendientes(usuario, true).then(invalidar, invalidar);
+      }
     },
   });
 }

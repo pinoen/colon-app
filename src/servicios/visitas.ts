@@ -426,6 +426,49 @@ async function sincronizarOperacionVisita(
   return { success: true, data: guardada };
 }
 
+export async function sincronizarVisitaPendientePorId(
+  usuario: Usuario,
+  id: string,
+): Promise<Result<null>> {
+  const base = await abrirBaseDatos();
+  const fila = await base.getFirstAsync<FilaCola>(
+    `SELECT id, entidad, accion, payload FROM cola_sincronizacion
+     WHERE id = ? AND entidad = 'visita'`,
+    [id],
+  );
+  if (
+    fila === null ||
+    (fila.accion !== 'crear' && fila.accion !== 'actualizar')
+  ) {
+    return { success: true, data: null };
+  }
+  try {
+    const payload: unknown = JSON.parse(fila.payload);
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      (payload as Record<string, unknown>).usuarioId !== usuario.id ||
+      typeof (payload as Record<string, unknown>).visitaId !== 'string'
+    ) {
+      return { success: true, data: null };
+    }
+    const resultado = await sincronizarOperacionVisita(usuario, {
+      id: fila.id,
+      accion: fila.accion,
+      payload: payload as PayloadColaVisita,
+    });
+    if (!resultado.success) {
+      return resultado;
+    }
+    return { success: true, data: null };
+  } catch {
+    return {
+      success: false,
+      error: 'No pudimos procesar una visita pendiente.',
+    };
+  }
+}
+
 async function sincronizarVisitaPendiente(
   usuario: Usuario,
   visitaId: IdVisita,
@@ -472,6 +515,13 @@ async function prepararVisitasLocalesParaCuenta(
   }
 }
 
+export async function prepararVisitasPendientesDeCuenta(
+  usuario: Usuario,
+): Promise<void> {
+  await prepararVisitasLocalesParaCuenta(usuario);
+  await asegurarVisitaSinCola(usuario.id);
+}
+
 async function asegurarVisitaSinCola(
   usuarioId: IdUsuario,
 ): Promise<void> {
@@ -505,20 +555,6 @@ async function asegurarVisitaSinCola(
       sincronizada: false,
     });
   }
-}
-
-async function sincronizarPendientesVisitas(
-  usuario: Usuario,
-): Promise<Result<null>> {
-  await asegurarVisitaSinCola(usuario.id);
-  const pendientes = await leerPendientesVisitas(usuario.id);
-  for (const pendiente of pendientes) {
-    const resultado = await sincronizarOperacionVisita(usuario, pendiente);
-    if (!resultado.success) {
-      return resultado;
-    }
-  }
-  return { success: true, data: null };
 }
 
 async function resolverLugarVisita(id: IdLugar): Promise<boolean> {
@@ -745,22 +781,7 @@ export async function listarVisitas(
   }
 
   try {
-    await prepararVisitasLocalesParaCuenta(usuario);
-    const sincronizacion = await sincronizarPendientesVisitas(usuario);
-    if (!sincronizacion.success) {
-      if (
-        sincronizacion.codigo === 'NO_AUTENTICADO' ||
-        sincronizacion.estado === 401
-      ) {
-        return sincronizacion;
-      }
-      return obtenerCacheLocal(usuario.id, {
-        success: false,
-        error: sincronizacion.error,
-        codigo: sincronizacion.codigo,
-        estado: sincronizacion.estado,
-      });
-    }
+    await prepararVisitasPendientesDeCuenta(usuario);
 
     const remotas = await obtenerVisitasRemotas();
     if (!remotas.success) {

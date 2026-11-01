@@ -274,48 +274,63 @@ async function quitarPendienteEvento(id: string): Promise<void> {
   await base.runAsync('DELETE FROM cola_sincronizacion WHERE id = ?', [id]);
 }
 
-async function sincronizarPendientesEventos(
-  usuarioId: IdUsuario,
+export async function sincronizarEventoGuardadoPendientePorId(
+  id: string,
 ): Promise<Result<null>> {
-  const pendientes = await leerPendientesEventos(usuarioId);
-  for (const pendiente of pendientes) {
-    const respuesta =
-      pendiente.accion === 'guardar'
-        ? await peticion<Evento>({
-            method: 'PUT',
-            url: `/yo/eventos-guardados/${encodeURIComponent(pendiente.payload.eventoId)}`,
-          })
-        : await peticion<null>({
-            method: 'DELETE',
-            url: `/yo/eventos-guardados/${encodeURIComponent(pendiente.payload.eventoId)}`,
-          });
-    if (!respuesta.success) {
-      if (
-        pendiente.accion === 'guardar' &&
-        (respuesta.codigo === 'EVENTO_NO_VIGENTE' ||
-          respuesta.codigo === 'EVENTO_NO_ENCONTRADO')
-      ) {
-        await quitarPendienteEvento(pendiente.id);
-        const recordatorios = await leerRecordatorios();
-        const local = recordatorios[pendiente.payload.eventoId];
-        if (local?.usuarioId === usuarioId) {
-          await cancelarNotificacionLocal(local);
-          const restantes = { ...recordatorios };
-          delete restantes[pendiente.payload.eventoId];
-          await escribirRecordatorios(restantes);
-        }
-        continue;
-      }
-      return respuesta;
-    }
-    if (pendiente.accion === 'guardar') {
-      await aplicarEventoGuardadoRemoto(
-        usuarioId,
-        respuesta.data as Evento,
-      );
-    }
-    await quitarPendienteEvento(pendiente.id);
+  const base = await abrirBaseDatos();
+  const fila = await base.getFirstAsync<FilaColaEvento>(
+    `SELECT id, accion, payload FROM cola_sincronizacion
+     WHERE id = ? AND entidad = 'evento-guardado'`,
+    [id],
+  );
+  if (
+    fila === null ||
+    (fila.accion !== 'guardar' && fila.accion !== 'quitar')
+  ) {
+    return { success: true, data: null };
   }
+
+  let payload: PayloadEventoGuardado;
+  try {
+    payload = JSON.parse(fila.payload) as PayloadEventoGuardado;
+  } catch {
+    return { success: false, error: 'La operación de agenda guardada no es válida.' };
+  }
+
+  const respuesta =
+    fila.accion === 'guardar'
+      ? await peticion<Evento>({
+          method: 'PUT',
+          url: `/yo/eventos-guardados/${encodeURIComponent(payload.eventoId)}`,
+        })
+      : await peticion<null>({
+          method: 'DELETE',
+          url: `/yo/eventos-guardados/${encodeURIComponent(payload.eventoId)}`,
+        });
+  if (!respuesta.success) {
+    if (
+      fila.accion === 'guardar' &&
+      (respuesta.codigo === 'EVENTO_NO_VIGENTE' ||
+        respuesta.codigo === 'EVENTO_NO_ENCONTRADO')
+    ) {
+      await quitarPendienteEvento(fila.id);
+      const recordatorios = await leerRecordatorios();
+      const local = recordatorios[payload.eventoId];
+      if (local?.usuarioId === payload.usuarioId) {
+        await cancelarNotificacionLocal(local);
+        const restantes = { ...recordatorios };
+        delete restantes[payload.eventoId];
+        await escribirRecordatorios(restantes);
+      }
+      return { success: true, data: null };
+    }
+    return respuesta;
+  }
+
+  if (fila.accion === 'guardar') {
+    await aplicarEventoGuardadoRemoto(payload.usuarioId, respuesta.data as Evento);
+  }
+  await quitarPendienteEvento(fila.id);
   return { success: true, data: null };
 }
 
@@ -387,6 +402,31 @@ async function cacheLocalEventosGuardados(
     return { success: true, data: cacheados };
   }
   return errorOriginal;
+}
+
+export async function prepararEventosGuardadosLocales(
+  usuarioId: IdUsuario,
+): Promise<void> {
+  const recordatorios = await leerRecordatorios();
+  let actualizados = false;
+  for (const [eventoId, recordatorio] of Object.entries(recordatorios)) {
+    if (recordatorio.usuarioId !== null) {
+      continue;
+    }
+    await guardarPendienteEvento('guardar', {
+      usuarioId,
+      eventoId: eventoId as IdEvento,
+    });
+    recordatorios[eventoId] = {
+      ...recordatorio,
+      usuarioId,
+      sincronizada: false,
+    };
+    actualizados = true;
+  }
+  if (actualizados) {
+    await escribirRecordatorios(recordatorios);
+  }
 }
 
 async function asegurarPermisoNotificaciones(): Promise<ApiNotificaciones | null> {
@@ -543,42 +583,8 @@ export async function listarRecordatoriosEventos(
     };
   }
 
-  for (const [eventoId, recordatorio] of Object.entries(recordatoriosLocales)) {
-    if (recordatorio.usuarioId !== null) {
-      continue;
-    }
-    await guardarPendienteEvento('guardar', {
-      usuarioId: usuario.id,
-      eventoId: eventoId as IdEvento,
-    });
-    recordatoriosLocales[eventoId] = {
-      ...recordatorio,
-      usuarioId: usuario.id,
-      sincronizada: false,
-    };
-  }
-  await escribirRecordatorios(recordatoriosLocales);
-
-  const sincronizacion = await sincronizarPendientesEventos(usuario.id);
-  if (!sincronizacion.success) {
-    if (
-      sincronizacion.codigo === 'NO_AUTENTICADO' ||
-      sincronizacion.estado === 401
-    ) {
-      return {
-        success: false,
-        error: sincronizacion.error,
-        codigo: sincronizacion.codigo,
-        estado: sincronizacion.estado,
-      };
-    }
-    return cacheLocalEventosGuardados(usuario.id, {
-      success: false,
-      error: sincronizacion.error,
-      codigo: sincronizacion.codigo,
-      estado: sincronizacion.estado,
-    });
-  }
+  await prepararEventosGuardadosLocales(usuario.id);
+  const recordatoriosMigrados = await leerRecordatorios();
 
   const remotos = await obtenerEventosGuardadosRemotos();
   if (!remotos.success) {
@@ -589,7 +595,7 @@ export async function listarRecordatoriosEventos(
 
   const guardados = new Map<IdEvento, RecordatorioEvento>();
   for (const evento of remotos.data) {
-    const existente = recordatoriosLocales[evento.id];
+    const existente = recordatoriosMigrados[evento.id];
     const admiteAviso =
       evento.estado === 'programado' && Date.parse(evento.inicio) > Date.now();
     let notificacionId = admiteAviso ? existente?.notificacionId ?? null : null;
@@ -624,7 +630,7 @@ export async function listarRecordatoriosEventos(
       continue;
     }
     const existente =
-      recordatoriosLocales[pendiente.payload.eventoId] ?? {
+      recordatoriosMigrados[pendiente.payload.eventoId] ?? {
         eventoId: pendiente.payload.eventoId,
         notificacionId: null,
         programadoPara: null,
@@ -638,7 +644,7 @@ export async function listarRecordatoriosEventos(
     });
   }
 
-  for (const [eventoId, recordatorio] of Object.entries(recordatoriosLocales)) {
+  for (const [eventoId, recordatorio] of Object.entries(recordatoriosMigrados)) {
     if (
       recordatorio.usuarioId === usuario.id &&
       !guardados.has(eventoId as IdEvento) &&
@@ -654,7 +660,7 @@ export async function listarRecordatoriosEventos(
   }
 
   const combinado: RecordatoriosEvento = {};
-  for (const [eventoId, recordatorio] of Object.entries(recordatoriosLocales)) {
+  for (const [eventoId, recordatorio] of Object.entries(recordatoriosMigrados)) {
     if (recordatorio.usuarioId !== usuario.id) {
       combinado[eventoId] = recordatorio;
     }
