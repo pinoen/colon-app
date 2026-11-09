@@ -78,6 +78,9 @@ export default function LugaresScreen() {
           onChangeText={setTextoBusqueda}
           placeholder="Buscar por nombre"
           placeholderTextColor={paleta['texto-secundario']}
+          accessibilityRole="search"
+          accessibilityLabel="Buscar lugares por nombre"
+          accessibilityHint="Escribí para filtrar los lugares disponibles"
           className="rounded-xl border border-borde bg-superficie px-4 py-3 text-texto dark:border-borde-oscuro dark:bg-superficie-oscura dark:text-texto-oscuro"
         />
         <ScrollView
@@ -88,6 +91,9 @@ export default function LugaresScreen() {
           <View className="flex-row gap-2 pr-4">
             <Pressable
               onPress={() => router.setParams({ categoria: undefined })}
+              accessibilityRole="button"
+              accessibilityLabel="Filtrar por todas las categorías"
+              accessibilityState={{ selected: categoria === undefined }}
               className={`rounded-full px-4 py-2 ${categoria === undefined
                   ? 'bg-primario'
                   : 'bg-superficie dark:bg-superficie-oscura'
@@ -110,6 +116,9 @@ export default function LugaresScreen() {
                     categoria: c.id === categoria ? undefined : c.id,
                   })
                 }
+                accessibilityRole="button"
+                accessibilityLabel={`Filtrar por categoría ${c.nombre}`}
+                accessibilityState={{ selected: categoria === c.id }}
                 className={`rounded-full px-4 py-2 ${categoria === c.id
                     ? 'bg-primario'
                     : 'bg-superficie dark:bg-superficie-oscura'
@@ -130,27 +139,38 @@ export default function LugaresScreen() {
       </View>
 
       {isPending ? (
-        <View className="flex-1 items-center justify-center gap-3">
+        <View
+          accessibilityLiveRegion="polite"
+          className="flex-1 items-center justify-center gap-3"
+        >
           <ActivityIndicator size="large" color={paleta.primario} />
           <Text className="text-texto-secundario dark:text-texto-secundario-oscuro">
             Cargando lugares...
           </Text>
         </View>
       ) : isError ? (
-        <View className="flex-1 items-center justify-center gap-4 p-6">
+        <View
+          accessibilityLiveRegion="assertive"
+          className="flex-1 items-center justify-center gap-4 p-6"
+        >
           <Text className="text-center text-base text-texto dark:text-texto-oscuro">
             No se pudieron cargar los lugares. Verificá tu conexión e intentá de
             nuevo.
           </Text>
           <Pressable
             onPress={() => refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Reintentar cargar los lugares"
             className="rounded-xl bg-primario px-6 py-3"
           >
             <Text className="text-base font-semibold text-blanco">Reintentar</Text>
           </Pressable>
         </View>
       ) : lugares.length === 0 ? (
-        <View className="flex-1 items-center justify-center gap-3 p-6">
+        <View
+          accessibilityLiveRegion="polite"
+          className="flex-1 items-center justify-center gap-3 p-6"
+        >
           <Text className="text-center text-lg font-semibold text-texto dark:text-texto-oscuro">
             No encontramos lugares
           </Text>

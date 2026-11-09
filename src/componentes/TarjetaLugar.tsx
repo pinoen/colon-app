@@ -30,9 +30,20 @@ export function TarjetaLugar({ lugar, onPress }: Props) {
     etiquetas.push('Accesible');
   }
 
+  const resumenAccesibilidad = [
+    lugar.nombre,
+    lugar.descripcionCorta,
+    etiquetas.length > 0 ? `Características: ${etiquetas.join(', ')}` : '',
+  ]
+    .filter(Boolean)
+    .join('. ');
+
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver detalle de ${lugar.nombre}. ${resumenAccesibilidad}`}
+      accessibilityHint="Toca dos veces para ver la información completa de este lugar"
       className="overflow-hidden rounded-2xl bg-superficie active:opacity-80 dark:bg-superficie-oscura"
     >
       {mostrarImagen ? (
@@ -40,10 +51,16 @@ export function TarjetaLugar({ lugar, onPress }: Props) {
           source={{ uri: lugar.imagenes[0] }}
           onError={() => setCargaFallida(true)}
           resizeMode="cover"
+          accessibilityElementsHidden={true}
+          importantForAccessibility="no"
           className="h-40 w-full"
         />
       ) : (
-        <View className="h-40 w-full items-center justify-center bg-borde/40 dark:bg-borde-oscuro/40">
+        <View
+          accessibilityElementsHidden={true}
+          importantForAccessibility="no"
+          className="h-40 w-full items-center justify-center bg-borde/40 dark:bg-borde-oscuro/40"
+        >
           <Text className="text-sm text-texto-secundario dark:text-texto-secundario-oscuro">
             Sin fotos
           </Text>

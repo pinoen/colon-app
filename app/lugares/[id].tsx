@@ -59,6 +59,8 @@ export default function DetalleLugar() {
         <Pressable
           onPress={() => router.back()}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Volver a la pantalla anterior"
           className="rounded-full bg-superficie px-4 py-2 dark:bg-superficie-oscura"
         >
           <Text className="text-base font-semibold text-primario dark:text-primario-claro">
@@ -190,7 +192,10 @@ function ContenidoDetalle({
             <Badge texto={categoriaNombre} />
           </View>
         ) : null}
-        <Text className="text-2xl font-bold text-texto dark:text-texto-oscuro">
+        <Text
+          accessibilityRole="header"
+          className="text-2xl font-bold text-texto dark:text-texto-oscuro"
+        >
           {lugar.nombre}
         </Text>
         <View className="flex-row flex-wrap items-center gap-2">
@@ -279,11 +284,15 @@ function ContenidoDetalle({
             etiqueta="Teléfono"
             valor={telefono ?? 'Sin teléfono'}
             onPress={telefono !== null ? () => abrirEnlace(`tel:${telefono}`) : undefined}
+            rolAccesibilidad="link"
+            etiquetaAccesibilidad={telefono !== null ? `Llamar al teléfono ${telefono}` : undefined}
           />
           <FilaDato
             etiqueta="Sitio web"
             valor={sitioWeb ?? 'Sin sitio web'}
             onPress={sitioWeb !== null ? () => abrirEnlace(sitioWeb) : undefined}
+            rolAccesibilidad="link"
+            etiquetaAccesibilidad={sitioWeb !== null ? `Abrir sitio web ${sitioWeb}` : undefined}
           />
           <FilaDato etiqueta="Entrada" valor={precio ?? 'Sin datos de entrada'} />
           <FilaDato etiqueta="Accesible" valor={lugar.accesible ? 'Sí' : 'No'} />
@@ -332,7 +341,10 @@ function ContenidoDetalle({
 function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <View className="gap-3">
-      <Text className="text-xl font-bold text-texto dark:text-texto-oscuro">
+      <Text
+        accessibilityRole="header"
+        className="text-xl font-bold text-texto dark:text-texto-oscuro"
+      >
         {titulo}
       </Text>
       {children}
@@ -366,10 +378,14 @@ function FilaDato({
   etiqueta,
   valor,
   onPress,
+  rolAccesibilidad,
+  etiquetaAccesibilidad,
 }: {
   etiqueta: string;
   valor: string;
   onPress?: () => void;
+  rolAccesibilidad?: 'button' | 'link';
+  etiquetaAccesibilidad?: string;
 }) {
   const contenido = (
     <>
@@ -385,7 +401,12 @@ function FilaDato({
     return <View className="flex-row items-start gap-2">{contenido}</View>;
   }
   return (
-    <Pressable onPress={onPress} className="flex-row items-start gap-2">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={rolAccesibilidad ?? 'button'}
+      accessibilityLabel={etiquetaAccesibilidad ?? `${etiqueta}: ${valor}`}
+      className="flex-row items-start gap-2"
+    >
       {contenido}
     </Pressable>
   );
