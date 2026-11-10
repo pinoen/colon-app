@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MapaOSM } from '@/componentes/MapaOSM';
 import type { MapaOSMRef } from '@/componentes/mapaComun';
 import { useLugares } from '@/hooks/useLugares';
+import { useNotificaciones } from '@/hooks/useNotificaciones';
 import { useUbicacion } from '@/hooks/useUbicacion';
 import { categoriaKeys } from '@/queries/categoriaKeys';
 import { listarCategorias } from '@/servicios/categorias';
@@ -60,6 +61,17 @@ export default function MapaScreen() {
     refetch,
   } = useLugares(categoria === undefined ? {} : { categoriaId: categoria });
   const { data: ubicacion, refetch: refetchUbicacion } = useUbicacion();
+  const { ultimoAviso } = useNotificaciones();
+  const [avisoVisible, setAvisoVisible] = useState<Lugar | null>(null);
+
+  useEffect(() => {
+    if (ultimoAviso === null) {
+      return;
+    }
+    setAvisoVisible(ultimoAviso);
+    const temporizador = setTimeout(() => setAvisoVisible(null), 6000);
+    return () => clearTimeout(temporizador);
+  }, [ultimoAviso]);
 
   const categoriasQuery = useQuery({
     queryKey: categoriaKeys.listar(),
@@ -205,6 +217,14 @@ export default function MapaScreen() {
         <View className="absolute left-4 right-20 top-14 rounded-xl bg-superficie px-3 py-2 dark:bg-superficie-oscura">
           <Text className="text-xs text-texto-secundario dark:text-texto-secundario-oscuro">
             {errorMapa}
+          </Text>
+        </View>
+      ) : null}
+
+      {avisoVisible !== null ? (
+        <View className="absolute left-4 right-4 top-24 rounded-xl bg-acento px-4 py-3 shadow-lg">
+          <Text className="text-sm font-semibold text-texto">
+            Aviso de proximidad: estás cerca de {avisoVisible.nombre}
           </Text>
         </View>
       ) : null}

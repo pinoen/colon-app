@@ -1,7 +1,5 @@
-import { AndroidImportance } from 'expo-notifications/build/NotificationChannelManager.types';
 import { SchedulableTriggerInputTypes } from 'expo-notifications/build/Notifications.types';
 import Storage from 'expo-sqlite/kv-store';
-import { Platform } from 'react-native';
 
 import type { FiltrosEvento } from '@/queries/eventoKeys';
 import {
@@ -16,77 +14,17 @@ import {
   puedeUsarCache,
 } from '@/servicios/clienteApi';
 import { listarLugares } from '@/servicios/lugares';
+import {
+  asegurarPermisoNotificaciones,
+  CANAL_RECORDATORIOS,
+  obtenerApiNotificaciones,
+} from '@/servicios/notificaciones';
 import type { Result } from '@/tipos/api';
 import type { Evento, IdEvento } from '@/tipos/evento';
 import type { IdUsuario, Usuario } from '@/tipos/usuario';
 import { formatearFechaDia, formatearHora } from '@/utilidades/formato';
 
 const CLAVE_RECORDATORIOS = 'agenda:recordatorios:v1';
-const CANAL_RECORDATORIOS = 'recordatorios-agenda';
-
-/**
- * Expo Go (SDK 57) no incluye `ExpoTopicSubscriptionModule`, que el índice de
- * `expo-notifications` importa para notificaciones push. Por eso cargamos solo
- * los módulos de notificaciones locales de forma diferida y toleramos que el
- * entorno no los soporte (la agenda sigue funcionando).
- */
-interface ApiNotificaciones {
-  setNotificationHandler: typeof import('expo-notifications/build/NotificationsHandler').setNotificationHandler;
-  getPermissionsAsync: typeof import('expo-notifications/build/NotificationPermissions').getPermissionsAsync;
-  requestPermissionsAsync: typeof import('expo-notifications/build/NotificationPermissions').requestPermissionsAsync;
-  scheduleNotificationAsync: typeof import('expo-notifications/build/scheduleNotificationAsync').scheduleNotificationAsync;
-  cancelScheduledNotificationAsync: typeof import('expo-notifications/build/cancelScheduledNotificationAsync').cancelScheduledNotificationAsync;
-  setNotificationChannelAsync: typeof import('expo-notifications/build/setNotificationChannelAsync').setNotificationChannelAsync;
-}
-
-let apiNotificaciones: ApiNotificaciones | null | undefined;
-
-function obtenerApiNotificaciones(): ApiNotificaciones | null {
-  if (apiNotificaciones !== undefined) {
-    return apiNotificaciones;
-  }
-
-  try {
-    const { setNotificationHandler } =
-      require('expo-notifications/build/NotificationsHandler') as typeof import('expo-notifications/build/NotificationsHandler');
-    const { getPermissionsAsync, requestPermissionsAsync } =
-      require('expo-notifications/build/NotificationPermissions') as typeof import('expo-notifications/build/NotificationPermissions');
-    const { scheduleNotificationAsync } =
-      require('expo-notifications/build/scheduleNotificationAsync') as typeof import('expo-notifications/build/scheduleNotificationAsync');
-    const { cancelScheduledNotificationAsync } =
-      require('expo-notifications/build/cancelScheduledNotificationAsync') as typeof import('expo-notifications/build/cancelScheduledNotificationAsync');
-    const { setNotificationChannelAsync } =
-      require('expo-notifications/build/setNotificationChannelAsync') as typeof import('expo-notifications/build/setNotificationChannelAsync');
-
-    apiNotificaciones = {
-      setNotificationHandler,
-      getPermissionsAsync,
-      requestPermissionsAsync,
-      scheduleNotificationAsync,
-      cancelScheduledNotificationAsync,
-      setNotificationChannelAsync,
-    };
-
-    try {
-      setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowBanner: true,
-          shouldShowList: true,
-          shouldPlaySound: true,
-          shouldSetBadge: false,
-        }),
-      });
-    } catch {
-      // Sin handler las notificaciones locales se agendan igual.
-    }
-
-    return apiNotificaciones;
-  } catch {
-    apiNotificaciones = null;
-    return null;
-  }
-}
-
 
 /** Minutos antes del inicio en que se dispara el aviso local. */
 export const ANTELACION_RECORDATORIO_MINUTOS = 60;
@@ -426,38 +364,6 @@ export async function prepararEventosGuardadosLocales(
   }
   if (actualizados) {
     await escribirRecordatorios(recordatorios);
-  }
-}
-
-async function asegurarPermisoNotificaciones(): Promise<ApiNotificaciones | null> {
-  if (Platform.OS === 'web') {
-    return null;
-  }
-  const api = obtenerApiNotificaciones();
-  if (api === null) {
-    return null;
-  }
-  try {
-    if (Platform.OS === 'android') {
-      await api.setNotificationChannelAsync(CANAL_RECORDATORIOS, {
-        name: 'Recordatorios de agenda',
-        importance: AndroidImportance.DEFAULT,
-        sound: 'default',
-        vibrationPattern: [0, 250, 250, 250],
-      });
-    }
-
-    const actual = await api.getPermissionsAsync();
-    if (actual.granted) {
-      return api;
-    }
-    if (!actual.canAskAgain) {
-      return null;
-    }
-    const solicitado = await api.requestPermissionsAsync();
-    return solicitado.granted ? api : null;
-  } catch {
-    return null;
   }
 }
 

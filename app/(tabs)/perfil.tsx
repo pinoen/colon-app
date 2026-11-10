@@ -19,6 +19,7 @@ import { useAlternarFavorito, useFavoritos } from '@/hooks/useFavoritos';
 import { useLugares } from '@/hooks/useLugares';
 import { categoriaKeys } from '@/queries/categoriaKeys';
 import { listarCategorias } from '@/servicios/categorias';
+import { pedirPermisoNotificaciones } from '@/servicios/notificaciones';
 import type { IdLugar } from '@/tipos/lugar';
 import type { Preferencias } from '@/tipos/usuario';
 
@@ -137,6 +138,29 @@ export default function PerfilScreen() {
     if (!resultado.success) {
       Alert.alert('Preferencias', resultado.error);
     }
+  };
+
+  const cambiarAvisosProximidad = async (valor: boolean) => {
+    if (!valor) {
+      await cambiarPreferencias({ avisarProximidad: false });
+      return;
+    }
+
+    const permiso = await pedirPermisoNotificaciones();
+    if (permiso !== 'concedido') {
+      Alert.alert(
+        'Avisos de proximidad',
+        permiso === 'no-soportado'
+          ? 'Este dispositivo no admite notificaciones locales.'
+          : 'No tenemos permiso para mostrar notificaciones. Podés habilitarlo desde los ajustes del teléfono.',
+      );
+      if (preferencias.avisarProximidad) {
+        await cambiarPreferencias({ avisarProximidad: false });
+      }
+      return;
+    }
+
+    await cambiarPreferencias({ avisarProximidad: true });
   };
 
   const alternarCategoria = (categoriaId: string) => {
@@ -320,7 +344,7 @@ export default function PerfilScreen() {
                   <Switch
                     value={preferencias.avisarProximidad}
                     onValueChange={(valor) =>
-                      void cambiarPreferencias({ avisarProximidad: valor })
+                      void cambiarAvisosProximidad(valor)
                     }
                     trackColor={{
                       false: paleta.borde,
