@@ -33,12 +33,28 @@ export interface HorarioFormateado {
 }
 
 export function formatearHorarios(horarios: Horario[]): HorarioFormateado[] {
-  return [...horarios]
-    .sort((a, b) => a.dia - b.dia)
-    .map((horario) => ({
-      dia: horario.dia,
-      nombreDia: DIAS_SEMANA[horario.dia],
-      rango: `${horario.abre} → ${horario.cierra}`,
+  // La API devuelve un elemento por tramo: un lugar que abre mañana y
+  // tarde tiene dos elementos con el mismo `dia`. Se agrupan por día para
+  // mostrar una fila por día (y que las keys del listado sean únicas).
+  const tramosPorDia = new Map<Horario['dia'], Horario[]>();
+  for (const horario of horarios) {
+    const tramos = tramosPorDia.get(horario.dia);
+    if (tramos === undefined) {
+      tramosPorDia.set(horario.dia, [horario]);
+    } else {
+      tramos.push(horario);
+    }
+  }
+
+  return [...tramosPorDia.entries()]
+    .sort(([diaA], [diaB]) => diaA - diaB)
+    .map(([dia, tramos]) => ({
+      dia,
+      nombreDia: DIAS_SEMANA[dia],
+      rango: tramos
+        .sort((a, b) => a.abre.localeCompare(b.abre))
+        .map((tramo) => `${tramo.abre} → ${tramo.cierra}`)
+        .join(' · '),
     }));
 }
 
