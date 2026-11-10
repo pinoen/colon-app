@@ -31,8 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
-.env
-.env*.local
+.env*
 !.env.example
 
 # project documentation (internal, not for the repo)
