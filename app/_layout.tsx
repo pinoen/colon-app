@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 
+import { ErrorBoundary } from '@/componentes/ErrorBoundary';
 import { AuthProvider } from '@/context/AuthContext';
 import { TemaProvider } from '@/context/TemaContext';
 import { aplicarMigracionLocal } from '@/servicios/migracionLocal';
@@ -42,15 +43,17 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TemaProvider>
-        <AuthProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </AuthProvider>
-      </TemaProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TemaProvider>
+          <AuthProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </AuthProvider>
+        </TemaProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

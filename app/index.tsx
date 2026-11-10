@@ -52,7 +52,10 @@ export default function Inicio() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-2">
-          <Text className="text-3xl font-bold text-texto dark:text-texto-oscuro">
+          <Text
+            accessibilityRole="header"
+            className="text-3xl font-bold text-texto dark:text-texto-oscuro"
+          >
             Guía Turística de Colón
           </Text>
           <Text className="text-base text-texto-secundario dark:text-texto-secundario-oscuro">
@@ -61,17 +64,25 @@ export default function Inicio() {
         </View>
 
         <View className="gap-3">
-          <Text className="text-base font-semibold text-texto dark:text-texto-oscuro">
+          <Text
+            accessibilityRole="header"
+            className="text-base font-semibold text-texto dark:text-texto-oscuro"
+          >
             Acceso rápido
           </Text>
           {ACCESOS_PRINCIPALES.map((acceso) => (
             <Link key={acceso.ruta} href={acceso.ruta} asChild>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Ir a ${acceso.titulo}`}
-                className="flex-row items-center gap-4 rounded-2xl bg-primario p-4 active:opacity-90"
+                accessibilityLabel={`${acceso.titulo}. ${acceso.descripcion}`}
+                accessibilityHint={`Abre la sección ${acceso.titulo}.`}
+                className="min-h-14 flex-row items-center gap-4 rounded-2xl bg-primario p-4 active:opacity-90"
               >
-                <View className="h-12 w-12 items-center justify-center rounded-xl bg-blanco/15">
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  className="h-12 w-12 items-center justify-center rounded-xl bg-blanco/15"
+                >
                   <Ionicons
                     name={acceso.icono}
                     size={26}
@@ -90,6 +101,8 @@ export default function Inicio() {
                   name="chevron-forward"
                   size={20}
                   color={paleta.blanco}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
                 />
               </Pressable>
             </Link>
@@ -97,7 +110,10 @@ export default function Inicio() {
         </View>
 
         <View className="gap-3">
-          <Text className="text-base font-semibold text-texto dark:text-texto-oscuro">
+          <Text
+            accessibilityRole="header"
+            className="text-base font-semibold text-texto dark:text-texto-oscuro"
+          >
             Mi espacio
           </Text>
           <View className="overflow-hidden rounded-2xl bg-superficie dark:bg-superficie-oscura">
@@ -106,7 +122,8 @@ export default function Inicio() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Ir a ${acceso.titulo}`}
-                  className={`flex-row items-center gap-3 p-4 active:opacity-80 ${
+                  accessibilityHint={`Abre la sección ${acceso.titulo}.`}
+                  className={`min-h-14 flex-row items-center gap-3 p-4 active:opacity-80 ${
                     indice > 0
                       ? 'border-t border-borde dark:border-borde-oscuro'
                       : ''
@@ -116,6 +133,8 @@ export default function Inicio() {
                     name={acceso.icono}
                     size={24}
                     color={colorSecundario}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
                   />
                   <Text className="flex-1 text-base font-semibold text-texto dark:text-texto-oscuro">
                     {acceso.titulo}
@@ -124,6 +143,8 @@ export default function Inicio() {
                     name="chevron-forward"
                     size={20}
                     color={colorSecundario}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
                   />
                 </Pressable>
               </Link>
