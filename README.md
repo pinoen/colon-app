@@ -6,7 +6,17 @@ Aplicación móvil para turistas que visitan la ciudad de Colón (Entre Ríos): 
 
 ## Vista previa
 
-*(Pendiente: agregar captura de pantalla de la app o enlace a una demo en vivo.)*
+Capturas de la app en Android, con los datos de demostración:
+
+| Inicio | Lugares | Mapa | Agenda |
+|:---:|:---:|:---:|:---:|
+| <img src="assets/images/Screenshot_20261111-164813.png" width="200" alt="Pantalla de inicio con accesos rápidos"> | <img src="assets/images/Screenshot_20261111-164824.png" width="200" alt="Listado de lugares con búsqueda y filtros"> | <img src="assets/images/Screenshot_20261111-164846.png" width="200" alt="Mapa con lugares cercanos"> | <img src="assets/images/Screenshot_20261111-164859.png" width="200" alt="Agenda con eventos programados"> |
+| **Inicio** | **Lugares** | **Mapa** | **Agenda** |
+
+| Mi recorrido | Perfil | Detalle de lugar | Registrar visita |
+|:---:|:---:|:---:|:---:|
+| <img src="assets/images/Screenshot_20261111-164912.png" width="200" alt="Mi recorrido con opciones para registrar visitas"> | <img src="assets/images/Screenshot_20261111-164925.png" width="200" alt="Perfil con inicio de sesión y preferencias"> | <img src="assets/images/Screenshot_20261111-164948.png" width="200" alt="Detalle de un lugar con descripción y favoritos"> | <img src="assets/images/Screenshot_20261111-165012.png" width="200" alt="Selector de lugar para registrar una visita manual"> |
+| **Mi recorrido** | **Perfil** | **Detalle de lugar** | **Registrar visita** |
 
 ---
 
