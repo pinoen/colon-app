@@ -4,7 +4,7 @@
     "slug": "colon-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/colonER.png",
     "scheme": "colon-app",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -14,9 +14,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/colonFore.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/colonMono.png"
+        "foregroundImage": "./assets/images/colonER.png",
+        "backgroundImage": "./assets/images/colonER.png",
+        "monochromeImage": "./assets/images/colonER.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.colonapp",
@@ -39,7 +39,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/colonER.png",
           "imageWidth": 76
         }
       ],
