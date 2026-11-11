@@ -34,14 +34,6 @@ yarn-error.*
 .env*
 !.env.example
 
-# project documentation (internal, not for the repo)
-opencode.json
-/.opencode
-/constitution.md
-/plan.md
-/progress.md
-/spec.md
-/tasks.md
 
 # typescript
 *.tsbuildinfo
